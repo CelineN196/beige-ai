@@ -1,0 +1,6 @@
+cluster_id,name,size,percent,mean_sweetness,mean_health,top_mood,top_cake,top_time,top_weather
+0,Light & Savory Daytime Customers,7283,14.566,2.4934779623781407,3.2144720582177673,Happy,Korean Sesame Mini Bread,Afternoon,Sunny
+1,Indulgent Evening Customers,9767,19.534000000000002,9.237841711886967,3.032456230162793,Happy,Dark Chocolate Sea Salt Cake,Evening,Sunny
+2,Health-Conscious Evening Customers,12001,24.002000000000002,8.77268560953254,8.016331972335639,Happy,Dark Chocolate Sea Salt Cake,Evening,Sunny
+3,Health-Conscious Daytime Customers,12038,24.076,3.9208340255856453,8.117129091211165,Happy,Korean Sesame Mini Bread,Afternoon,Sunny
+4,Balanced Evening Customers,8911,17.822,5.744136460554371,3.077656828638761,Happy,Dark Chocolate Sea Salt Cake,Evening,Sunny
