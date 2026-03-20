@@ -23,8 +23,17 @@ from sklearn.metrics import (
     classification_report, 
     confusion_matrix
 )
+import sklearn
 import joblib
 import warnings
+import os
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import menu_config
+_BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BASE_DIR))
+
 from menu_config import CAKE_MENU
 
 warnings.filterwarnings('ignore')
@@ -32,13 +41,18 @@ warnings.filterwarnings('ignore')
 print("="*70)
 print("BEIGE.AI PHASE 3: ML PIPELINE")
 print("="*70)
+print(f"\n[Version Info]")
+print(f"  - scikit-learn: {sklearn.__version__}")
+print(f"  - numpy: {np.__version__}")
+print(f"  - pandas: {pd.__version__}")
 
 # ============================================================================
 # STEP 1: LOAD DATA
 # ============================================================================
 
 print("\n[1/6] Loading dataset...")
-df = pd.read_csv('/Users/queenceline/Downloads/Beige AI/beige_ai_cake_dataset_v2.csv')
+data_path = _BASE_DIR / "data" / "beige_ai_cake_dataset_v2.csv"
+df = pd.read_csv(str(data_path))
 
 print(f"✓ Shape: {df.shape}")
 print(f"✓ Cakes: {len(CAKE_MENU)} (from menu_config.py)")
@@ -231,9 +245,9 @@ if hasattr(tuned_model, 'feature_importances_'):
     axes[2].grid(axis='x', alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('/Users/queenceline/Downloads/Beige AI/phase3_model_evaluation.png', 
-            dpi=300, bbox_inches='tight')
-print("✓ Saved: phase3_model_evaluation.png")
+eval_fig_path = _BASE_DIR / "phase3_model_evaluation.png"
+plt.savefig(str(eval_fig_path), dpi=300, bbox_inches='tight')
+print(f"✓ Saved: phase3_model_evaluation.png → {eval_fig_path}")
 plt.close()
 
 # ============================================================================
@@ -242,22 +256,50 @@ plt.close()
 
 print("\nSaving artifacts...")
 
-joblib.dump(tuned_model, '/Users/queenceline/Downloads/Beige AI/best_model.joblib')
-joblib.dump(preprocessor, '/Users/queenceline/Downloads/Beige AI/preprocessor.joblib')
+# Create models directory if it doesn't exist
+models_dir = Path(__file__).resolve().parent.parent / "models"
+models_dir.mkdir(parents=True, exist_ok=True)
 
+# Prepare feature info with version metadata
 feature_info = {
     'categorical_features': categorical_features,
     'numerical_features': numerical_features,
     'cake_menu': CAKE_MENU,
     'classes': sorted(y.unique()),
     'model_type': best_model_name,
-    'test_accuracy': test_acc_final
+    'test_accuracy': test_acc_final,
+    'sklearn_version': sklearn.__version__,
+    'numpy_version': np.__version__,
+    'pandas_version': pd.__version__,
+    'training_date': pd.Timestamp.now().isoformat()
 }
-joblib.dump(feature_info, '/Users/queenceline/Downloads/Beige AI/feature_info.joblib')
 
-print(f"✓ best_model.joblib")
-print(f"✓ preprocessor.joblib")
-print(f"✓ feature_info.joblib")
+# Save artifacts with error handling
+try:
+    model_path = models_dir / "cake_model.joblib"
+    joblib.dump(tuned_model, str(model_path))
+    print(f"✓ Saved: {model_path}")
+    
+    preprocessor_path = models_dir / "preprocessor.joblib"
+    joblib.dump(preprocessor, str(preprocessor_path))
+    print(f"✓ Saved: {preprocessor_path}")
+    
+    feature_info_path = models_dir / "feature_info.joblib"
+    joblib.dump(feature_info, str(feature_info_path))
+    print(f"✓ Saved: {feature_info_path}")
+    
+    print(f"\n[Model Metadata]")
+    print(f"  - Model: {best_model_name}")
+    print(f"  - Test Accuracy: {test_acc_final:.4f}")
+    print(f"  - sklearn: {sklearn.__version__}")
+    print(f"  - numpy: {np.__version__}")
+    print(f"  - pandas: {pd.__version__}")
+    
+except Exception as e:
+    print(f"\n❌ Error saving artifacts: {e}")
+    print(f"Directory: {models_dir}")
+    print(f"Ensure you have write permissions to this location.")
+    raise
 
 # ============================================================================
 # SUMMARY

@@ -8,8 +8,9 @@ footer {visibility: hidden;}
 /* Global styling */
 html, body {
     background-color: #FAFAF5;
-    color: #1F1F1F;
+    color: #2C2C2C;
     font-family: 'Inter', sans-serif;
+    letter-spacing: 0.05em;
 }
 
 [data-testid="stAppViewContainer"] {
@@ -56,7 +57,7 @@ html, body {
 .hero-title {
     font-family: 'Playfair Display', serif;
     font-size: 4.2em;
-    color: #1F1F1F;
+    color: #2C2C2C;
     letter-spacing: 0.08em;
     margin-bottom: 16px;
     font-weight: 700;
@@ -157,26 +158,27 @@ html, body {
 .story-title {
     font-family: 'Playfair Display', serif;
     font-size: 2.2em;
-    color: #1F1F1F;
+    color: #2C2C2C;
     margin-bottom: 16px;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.05em;
     font-weight: 500;
 }
 
 .story-text {
     font-family: 'Inter', sans-serif;
     font-size: 1.08em;
-    color: #4A4A4A;
+    color: #2C2C2C;
     line-height: 1.8;
     font-weight: 300;
+    letter-spacing: 0.05em;
 }
 
 /* INPUT SECTION */
 .input-section {
     padding: 80px 40px;
-    background-color: #FFFFFF;
-    border-top: 1px solid #E6E2DC;
-    border-bottom: 1px solid #E6E2DC;
+    background-color: #F2EFE9;
+    border-top: 1px solid #E0DCD5;
+    border-bottom: 1px solid #E0DCD5;
     margin: 80px 0;
 }
 
@@ -188,7 +190,7 @@ html, body {
 .input-title {
     font-family: 'Playfair Display', serif;
     font-size: 2.8em;
-    color: #1F1F1F;
+    color: #2C2C2C;
     text-align: center;
     margin-bottom: 60px;
     letter-spacing: 0.05em;
@@ -210,10 +212,10 @@ html, body {
 .input-label {
     font-family: 'Inter', sans-serif;
     font-size: 0.95em;
-    color: #1F1F1F;
+    color: #2C2C2C;
     font-weight: 500;
     margin-bottom: 12px;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.05em;
 }
 
 /* RECOMMENDATION SECTION */
@@ -226,7 +228,7 @@ html, body {
 .rec-title {
     font-family: 'Playfair Display', serif;
     font-size: 2.8em;
-    color: #1F1F1F;
+    color: #2C2C2C;
     text-align: center;
     margin-bottom: 20px;
     letter-spacing: 0.05em;
@@ -235,10 +237,11 @@ html, body {
 
 .rec-subtitle {
     text-align: center;
-    color: #4A4A4A;
+    color: #2C2C2C;
     font-size: 1.05em;
     margin-bottom: 60px;
     font-family: 'Inter', sans-serif;
+    letter-spacing: 0.05em;
 }
 
 .rec-cards-container {
@@ -249,18 +252,25 @@ html, body {
 }
 
 .rec-card {
-    background-color: #FFFFFF;
-    border: 1px solid #E6E2DC;
-    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid #E0DCD5;
+    border-radius: 16px;
     padding: 40px 32px;
     text-align: center;
     transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    backdrop-filter: blur(8px);
+    animation: fadeInCard 0.6s ease-out forwards;
 }
 
+.rec-card:nth-child(1) { animation-delay: 0.1s; }
+.rec-card:nth-child(2) { animation-delay: 0.2s; }
+.rec-card:nth-child(3) { animation-delay: 0.3s; }
+
 .rec-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.12);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.85);
 }
 
 .rec-rank {
@@ -275,9 +285,9 @@ html, body {
 .rec-name {
     font-family: 'Playfair Display', serif;
     font-size: 1.8em;
-    color: #1F1F1F;
+    color: #2C2C2C;
     margin-bottom: 12px;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.05em;
     font-weight: 500;
 }
 
@@ -293,19 +303,21 @@ html, body {
 .rec-description {
     font-family: 'Inter', sans-serif;
     font-size: 0.98em;
-    color: #4A4A4A;
+    color: #2C2C2C;
     line-height: 1.8;
     margin-bottom: 24px;
     font-weight: 300;
+    letter-spacing: 0.05em;
 }
 
 .rec-detail {
     font-family: 'Inter', sans-serif;
     font-size: 0.9em;
-    color: #4A4A4A;
+    color: #2C2C2C;
     margin: 12px 0;
     padding: 8px 0;
-    border-top: 1px solid #E6E2DC;
+    border-top: 1px solid #E0DCD5;
+    letter-spacing: 0.05em;
 }
 
 /* INSIGHT SECTION */
@@ -316,7 +328,7 @@ html, body {
 .insight-title {
     font-family: 'Playfair Display', serif;
     font-size: 2.8em;
-    color: #1F1F1F;
+    color: #2C2C2C;
     text-align: center;
     margin-bottom: 16px;
     letter-spacing: 0.05em;
@@ -325,50 +337,53 @@ html, body {
 
 .insight-subtitle {
     text-align: center;
-    color: #4A4A4A;
+    color: #2C2C2C;
     font-size: 1.05em;
     margin-bottom: 60px;
     font-family: 'Inter', sans-serif;
+    letter-spacing: 0.05em;
 }
 
 .insight-content {
     max-width: 1200px;
     margin: 0 auto;
-    background-color: #FFFFFF;
-    border: 1px solid #E6E2DC;
-    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid #E0DCD5;
+    border-radius: 16px;
     padding: 48px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    backdrop-filter: blur(8px);
 }
 
 .insight-text {
     font-family: 'Inter', sans-serif;
     font-size: 1.05em;
-    color: #4A4A4A;
+    color: #2C2C2C;
     line-height: 1.9;
     margin-bottom: 32px;
     font-weight: 300;
+    letter-spacing: 0.05em;
 }
 
 /* BUTTON STYLING */
 .stButton > button {
-    background-color: #1F1F1F;
+    background-color: #2C2C2C;
     color: white !important;
-    border-radius: 6px !important;
+    border-radius: 8px !important;
     border: none !important;
     padding: 14px 32px !important;
     font-weight: 500 !important;
     font-size: 15px !important;
     font-family: 'Inter', sans-serif !important;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(31, 31, 31, 0.15) !important;
-    letter-spacing: 0.02em;
+    box-shadow: 0 4px 12px rgba(44, 44, 44, 0.12) !important;
+    letter-spacing: 0.05em;
 }
 
 .stButton > button:hover {
-    background-color: #4A4A4A;
+    background-color: #3A3A3A;
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(31, 31, 31, 0.25) !important;
+    box-shadow: 0 6px 16px rgba(44, 44, 44, 0.15) !important;
 }
 
 .center-button {
@@ -389,16 +404,17 @@ html, body {
 
 /* INPUT FIELD STYLING */
 .stSelectbox > div > div {
-    border-radius: 6px;
-    border: 1px solid #E6E2DC !important;
-    background-color: #FFFFFF !important;
-    color: #1F1F1F !important;
+    border-radius: 8px;
+    border: 1px solid #E0DCD5 !important;
+    background-color: #F2EFE9 !important;
+    color: #2C2C2C !important;
 }
 
 .stSelectbox > label {
-    color: #1F1F1F !important;
+    color: #2C2C2C !important;
     font-weight: 500;
     font-family: 'Inter', sans-serif;
+    letter-spacing: 0.05em;
 }
 
 .stSlider {
@@ -410,52 +426,56 @@ html, body {
 }
 
 .stCheckbox > label {
-    color: #1F1F1F !important;
+    color: #2C2C2C !important;
     font-weight: 400;
     font-family: 'Inter', sans-serif;
+    letter-spacing: 0.05em;
 }
 
 /* METRIC CARDS */
 [data-testid="metric-container"] {
-    background-color: #FFFFFF;
-    border: 1px solid #E6E2DC;
-    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid #E0DCD5;
+    border-radius: 12px;
     padding: 24px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    backdrop-filter: blur(8px);
 }
 
 [data-testid="metric-container"] > div:first-child {
-    color: #1F1F1F;
+    color: #2C2C2C;
     font-weight: 600;
     font-family: 'Inter', sans-serif;
+    letter-spacing: 0.05em;
 }
 
 /* MESSAGES */
 .stSuccess {
-    background-color: #FFFFFF;
+    background-color: #F2EFE9;
     border-left: 3px solid #BDB2A7;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 16px;
     font-family: 'Inter', sans-serif;
-    color: #1F1F1F;
+    color: #2C2C2C;
+    letter-spacing: 0.05em;
 }
 
 .stInfo {
-    background-color: #FFFFFF;
+    background-color: #F2EFE9;
     border-left: 3px solid #BDB2A7;
-    border-radius: 6px;
+    border-radius: 8px;
 }
 
 .stWarning {
-    background-color: #FFFFFF;
+    background-color: #F2EFE9;
     border-left: 3px solid #BDB2A7;
-    border-radius: 6px;
+    border-radius: 8px;
 }
 
 /* FOOTER */
 .footer-section {
-    background-color: #FFFFFF;
-    border-top: 1px solid #E6E2DC;
+    background-color: #F2EFE9;
+    border-top: 1px solid #E0DCD5;
     padding: 80px 40px;
     text-align: center;
 }
@@ -463,7 +483,7 @@ html, body {
 .footer-title {
     font-family: 'Playfair Display', serif;
     font-size: 1.6em;
-    color: #1F1F1F;
+    color: #2C2C2C;
     margin-bottom: 12px;
     letter-spacing: 0.05em;
     font-weight: 500;
@@ -471,10 +491,11 @@ html, body {
 
 .footer-text {
     font-family: 'Inter', sans-serif;
-    color: #4A4A4A;
+    color: #2C2C2C;
     font-size: 1em;
     line-height: 1.8;
     margin-bottom: 8px;
+    letter-spacing: 0.05em;
 }
 
 .footer-meta {
@@ -482,7 +503,7 @@ html, body {
     color: #A0A0A0;
     font-size: 0.85em;
     margin-top: 16px;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.05em;
 }
 
 /* Progress bar */
@@ -493,8 +514,36 @@ html, body {
 
 /* Dividers */
 hr {
-    border-color: #E6E2DC !important;
+    border-color: #E0DCD5 !important;
     border-style: solid !important;
     border-width: 1px !important;
     margin: 40px 0;
+}
+
+/* Cake Card Glassmorphism Animation */
+@keyframes fadeInCard {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Alias for cake-card class */
+.cake-card {
+    background: rgba(255, 255, 255, 0.75) !important;
+    border: 1px solid #E0DCD5 !important;
+    border-radius: 16px !important;
+    backdrop-filter: blur(8px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
+}
+
+.cake-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08) !important;
+    background: rgba(255, 255, 255, 0.85) !important;
 }
