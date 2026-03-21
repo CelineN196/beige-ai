@@ -85,6 +85,9 @@ if 'time_of_day' not in st.session_state:
 if 'micro_story' not in st.session_state:
     st.session_state.micro_story = None
 
+if 'analyst_mode' not in st.session_state:
+    st.session_state.analyst_mode = False
+
 # ============================================================================
 # PAGE CONFIGURATION
 # ============================================================================
@@ -150,6 +153,20 @@ with header_col2:
     if st.button(f"🛒 Basket ({basket_count})", key='header_basket', use_container_width=True):
         st.session_state.page = 'checkout'
         st.rerun()
+
+# ============================================================================
+# ANALYST MODE AUTHENTICATION
+# ============================================================================
+
+password = st.sidebar.text_input("Admin Access", type="password", key="admin_password")
+
+if password == "beige_admin":
+    st.session_state.analyst_mode = True
+
+if st.session_state.analyst_mode:
+    st.sidebar.success("✓ Analyst Mode Enabled")
+else:
+    st.session_state.analyst_mode = False
 
 def get_time_of_day():
     """Determine time of day from system time."""
@@ -705,18 +722,17 @@ def display_ai_recommendations():
             # Find price from FULL_MENU
             cake_price = next((c['price'] for c in FULL_MENU if c['name'] == cake), 45.00)
             
-            card_html = f"""
-            <div class='rec-card'>
-                <div class='rec-rank'>{roman_numerals[idx]}</div>
-                <div class='rec-name'>{cake}</div>
-                <div class='rec-confidence'>{prob*100:.1f}% match</div>
-                <div class='rec-description'>Recommended for this moment based on your environment and mood.</div>
-                <div class='rec-detail'><strong>Category:</strong> {category}</div>
-                <div class='rec-detail'><strong>Flavor:</strong> {flavor}</div>
-                <div class='rec-detail'><strong>Sweetness:</strong> {sweetness}/10</div>
-                <div class='rec-detail'><strong>Wellness:</strong> {health}/10</div>
-            </div>
-            """
+            # Build confidence score section (analyst only)
+            confidence_section = ""
+            if st.session_state.analyst_mode:
+                confidence_section = f"<div class='rec-confidence'>{prob*100:.1f}% match</div>"
+            
+            # Build technical details section (analyst only)
+            technical_details = ""
+            if st.session_state.analyst_mode:
+                technical_details = f"<div class='rec-detail'><strong>Sweetness:</strong> {sweetness}/10</div><div class='rec-detail'><strong>Wellness:</strong> {health}/10</div>"
+            
+            card_html = f"""<div class='rec-card'><div class='rec-rank'>{roman_numerals[idx]}</div><div class='rec-name'>{cake}</div>{confidence_section}<div class='rec-description'>Recommended for this moment based on your environment and mood.</div><div class='rec-detail'><strong>Category:</strong> {category}</div><div class='rec-detail'><strong>Flavor:</strong> {flavor}</div>{technical_details}</div>"""
             st.markdown(card_html, unsafe_allow_html=True)
             
             if st.button("Add to Basket", key=f"ai_{idx}_{cake}", use_container_width=True):
@@ -733,68 +749,69 @@ def display_ai_recommendations():
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # Display chart
-    fig, ax = plt.subplots(figsize=(12, 5))
-    
-    all_indices = np.argsort(probabilities)[::-1]
-    all_cakes = [feature_info['classes'][i] for i in all_indices]
-    all_probs = [probabilities[i] for i in all_indices]
-    
-    cake_labels = []
-    for i, cake_name in enumerate(all_cakes):
-        if cake_name == top_3_cakes[0]:
-            cake_labels.append(f"I   {cake_name}")
-        elif cake_name == top_3_cakes[1]:
-            cake_labels.append(f"II   {cake_name}")
-        elif cake_name == top_3_cakes[2]:
-            cake_labels.append(f"III   {cake_name}")
-        else:
-            cake_labels.append(cake_name)
-    
-    colors = []
-    for cake_name in all_cakes:
-        if cake_name == top_3_cakes[0]:
-            colors.append('#1F1F1F')
-        elif cake_name == top_3_cakes[1]:
-            colors.append('#4A4A4A')
-        elif cake_name == top_3_cakes[2]:
-            colors.append('#BDB2A7')
-        else:
-            colors.append('#D4CEC7')
-    
-    bars = ax.barh(range(len(all_cakes)), all_probs, color=colors, edgecolor='#E6E2DC', linewidth=1)
-    
-    ax.set_xlabel('Confidence Score', fontsize=11, fontweight=500, color='#1F1F1F', family='Inter')
-    ax.set_title('AI Ranking of All Selections', fontsize=13, fontweight=500, pad=20, color='#1F1F1F', family='Playfair Display')
-    ax.set_yticks(range(len(cake_labels)))
-    ax.set_yticklabels(cake_labels, fontsize=10, family='Inter')
-    ax.set_xlim([0, max(all_probs) * 1.2])
-    ax.grid(axis='x', alpha=0.15, linestyle='-', color='#E6E2DC')
-    ax.set_facecolor('#FFFFFF')
-    fig.patch.set_facecolor('#FAFAF5')
-    
-    for i, (bar, prob) in enumerate(zip(bars, all_probs)):
-        width = bar.get_width()
-        ax.text(width, bar.get_y() + bar.get_height()/2.,
-                f'{prob*100:.1f}%',
-                ha='left', va='center', fontweight=500, fontsize=9,
-                bbox=dict(boxstyle='round,pad=0.4', facecolor=(1.0, 0.98, 0.96), edgecolor='#E6E2DC', alpha=1))
-    
-    plt.tight_layout()
-    
-    st.markdown("""
-        <div class='insight-section'>
-            <div class='insight-title'>Why This Recommendation?</div>
-            <div class='insight-subtitle'>How our AI ranked all available selections</div>
-            <div class='insight-content' style='background-color: #FFFFFF; padding: 20px;'>
-    """, unsafe_allow_html=True)
-    
-    st.pyplot(fig)
-    
-    st.markdown("""
+    # Display chart (analyst mode only)
+    if st.session_state.analyst_mode:
+        fig, ax = plt.subplots(figsize=(12, 5))
+        
+        all_indices = np.argsort(probabilities)[::-1]
+        all_cakes = [feature_info['classes'][i] for i in all_indices]
+        all_probs = [probabilities[i] for i in all_indices]
+        
+        cake_labels = []
+        for i, cake_name in enumerate(all_cakes):
+            if cake_name == top_3_cakes[0]:
+                cake_labels.append(f"I   {cake_name}")
+            elif cake_name == top_3_cakes[1]:
+                cake_labels.append(f"II   {cake_name}")
+            elif cake_name == top_3_cakes[2]:
+                cake_labels.append(f"III   {cake_name}")
+            else:
+                cake_labels.append(cake_name)
+        
+        colors = []
+        for cake_name in all_cakes:
+            if cake_name == top_3_cakes[0]:
+                colors.append('#1F1F1F')
+            elif cake_name == top_3_cakes[1]:
+                colors.append('#4A4A4A')
+            elif cake_name == top_3_cakes[2]:
+                colors.append('#BDB2A7')
+            else:
+                colors.append('#D4CEC7')
+        
+        bars = ax.barh(range(len(all_cakes)), all_probs, color=colors, edgecolor='#E6E2DC', linewidth=1)
+        
+        ax.set_xlabel('Confidence Score', fontsize=11, fontweight=500, color='#1F1F1F', family='Inter')
+        ax.set_title('AI Ranking of All Selections', fontsize=13, fontweight=500, pad=20, color='#1F1F1F', family='Playfair Display')
+        ax.set_yticks(range(len(cake_labels)))
+        ax.set_yticklabels(cake_labels, fontsize=10, family='Inter')
+        ax.set_xlim([0, max(all_probs) * 1.2])
+        ax.grid(axis='x', alpha=0.15, linestyle='-', color='#E6E2DC')
+        ax.set_facecolor('#FFFFFF')
+        fig.patch.set_facecolor('#FAFAF5')
+        
+        for i, (bar, prob) in enumerate(zip(bars, all_probs)):
+            width = bar.get_width()
+            ax.text(width, bar.get_y() + bar.get_height()/2.,
+                    f'{prob*100:.1f}%',
+                    ha='left', va='center', fontweight=500, fontsize=9,
+                    bbox=dict(boxstyle='round,pad=0.4', facecolor=(1.0, 0.98, 0.96), edgecolor='#E6E2DC', alpha=1))
+        
+        plt.tight_layout()
+        
+        st.markdown("""
+            <div class='insight-section'>
+                <div class='insight-title'>Why This Recommendation?</div>
+                <div class='insight-subtitle'>How our AI ranked all available selections</div>
+                <div class='insight-content' style='background-color: #FFFFFF; padding: 20px;'>
+        """, unsafe_allow_html=True)
+        
+        st.pyplot(fig)
+        
+        st.markdown("""
+                </div>
             </div>
-        </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
