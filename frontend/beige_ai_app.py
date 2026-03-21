@@ -100,6 +100,14 @@ st.set_page_config(
 )
 
 # ============================================================================
+# API KEY VALIDATION
+# ============================================================================
+
+api_key = st.secrets.get("GEMINI_API_KEY")
+if not api_key:
+    st.warning("⚠️ Gemini API key not configured. AI recommendations will use local templates. Configure in Streamlit Secrets.")
+
+# ============================================================================
 # LOAD STYLING
 # ============================================================================
 

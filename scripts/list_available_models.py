@@ -2,8 +2,14 @@
 """List available Gemini models"""
 import google.generativeai as genai
 import os
+import sys
 
-api_key = os.getenv('GEMINI_API_KEY', 'AIzaSyBb_2ZouURAbi-fBR8jL_uwEGthGSlBu2E')
+api_key = os.getenv('GEMINI_API_KEY')
+if not api_key:
+    print("❌ Error: GEMINI_API_KEY environment variable not set.")
+    print("Set it with: export GEMINI_API_KEY='your-api-key'")
+    sys.exit(1)
+
 genai.configure(api_key=api_key)
 
 print("Available Gemini Models:")
