@@ -6,7 +6,19 @@ Welcome! This guide helps you navigate all the documentation for the model compa
 
 ## 🎯 Start Here (Pick Your Path)
 
-### 👨‍💼 I'm a Manager/Product Owner
+### � I Want to Deploy to Streamlit Cloud
+**Goal:** Get the app running in production
+
+**Read first:**
+1. [**STREAMLIT_CLOUD_DEPLOYMENT.md**](STREAMLIT_CLOUD_DEPLOYMENT.md) - Complete deployment guide
+2. [**QUICK_REFERENCE.md**](QUICK_REFERENCE.md) - Key configuration values
+3. Return to docs/README.md for other paths
+
+**Key takeaway:** "All paths use pathlib, secrets managed via st.secrets, ready for cloud."
+
+---
+
+### �👨‍💼 I'm a Manager/Product Owner
 **Goal:** Understand project status and results
 
 **Read in order:**

@@ -1,37 +1,47 @@
 #!/usr/bin/env python3
 """
-Beige.AI Entry Point
-=====================
-Launches the Streamlit application for personalized cake recommendations.
+Beige.AI Application Launcher
+==============================
+Entry point for the Streamlit application.
 
 Usage:
-    Local development:
-        python main.py
-    
-    Or (for Streamlit Cloud):
-        streamlit run frontend/beige_ai_app.py
+    python main.py
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-def main():
-    """Launch the Streamlit app locally."""
-    project_root = Path(__file__).parent
-    app_path = project_root / "frontend" / "beige_ai_app.py"
+
+def main() -> None:
+    """
+    Launch the Beige.AI Streamlit application.
     
-    # Verify the app file exists
-    if not app_path.exists():
-        print(f"❌ Error: Streamlit app not found at {app_path}")
+    Works from any directory by automatically locating the project root
+    and running the Streamlit app with proper working directory context.
+    """
+    # Get project root (parent of this script)
+    project_root = Path(__file__).resolve().parent
+    
+    # Change to project root to ensure relative paths work correctly
+    os.chdir(project_root)
+    
+    # Run Streamlit app
+    app_script = "frontend/beige_ai_app.py"
+    
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "streamlit", "run", app_script],
+            check=False
+        )
+    except KeyboardInterrupt:
+        print("\n\n👋 Beige.AI terminated by user")
+        sys.exit(0)
+    except Exception as e:
+        print(f"❌ Error launching Beige.AI: {e}")
         sys.exit(1)
-    
-    # Run Streamlit with project root as working directory
-    print(f"🚀 Starting Beige.AI from {app_path}")
-    subprocess.run(
-        [sys.executable, "-m", "streamlit", "run", str(app_path)],
-        cwd=str(project_root)
-    )
+
 
 if __name__ == "__main__":
     main()

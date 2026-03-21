@@ -36,12 +36,14 @@ class DatabaseManager:
         
         Args:
             database_path: Path to SQLite database file.
-                          Defaults to beige_ai.db in project root.
+                          Defaults to beige_ai.db in data/ directory.
         """
         if database_path is None:
-            # Use root directory
+            # Use data directory for database storage
             project_root = Path(__file__).resolve().parents[2]
-            database_path = str(project_root / "beige_ai.db")
+            data_dir = project_root / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+            database_path = str(data_dir / "beige_ai.db")
         
         self.database_path = database_path
         self._local = threading.local()  # Thread-local storage for connections

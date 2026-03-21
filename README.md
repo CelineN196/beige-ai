@@ -75,7 +75,7 @@ source .venv/bin/activate    # macOS/Linux
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Set Gemini API key
+# 3. Set Gemini API key (optional, falls back to mock recommendations)
 export GEMINI_API_KEY="your-key-from-aistudio.google.com"
 
 # 4. Run the app
@@ -83,6 +83,20 @@ python main.py
 ```
 
 The app opens automatically at `http://localhost:8501`. No additional configuration needed.
+
+### Running the Application
+
+**Primary (recommended):**
+```bash
+python main.py
+```
+
+**Alternative (advanced):**
+```bash
+streamlit run frontend/beige_ai_app.py
+```
+
+Both commands launch the same Streamlit app. Use `main.py` for standard usage.
 
 ### First Steps
 

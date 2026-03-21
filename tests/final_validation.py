@@ -111,7 +111,7 @@ try:
         'frontend/beige_ai_app.py',
         'frontend/checkout_handler.py',
         'frontend/retail_analytics_dashboard.py',
-        'beige_retail.db'
+        'data/beige_retail.db'
     ]
     missing = []
     for f in required_files:

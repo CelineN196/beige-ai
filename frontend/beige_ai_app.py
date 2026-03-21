@@ -302,7 +302,7 @@ def generate_luxury_recommendation(mood, weather_condition, top_3_cakes, top_3_p
     """
     try:
         # Configure Gemini API
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = st.secrets.get("GEMINI_API_KEY", None)
         if not api_key:
             # Fallback to local template if API key not available
             return generate_local_explanation(mood, weather_condition, top_3_cakes, top_3_probs)
@@ -428,62 +428,134 @@ def generate_local_explanation(mood, weather_condition, top_3_cakes, top_3_probs
 # TRANSACTION LOGGING
 # ============================================================================
 
+# ============================================================================
+# ORDER LOGGING SYSTEM (HARDENED)
+# ============================================================================
+
+def save_order_data(order_id, items_purchased, ai_recommendation, result):
+    """
+    Save order data to CSV with robust error handling.
+    Writes to data/feedback_log.csv with schema:
+    - order_id (UUID, unique per order)
+    - items_purchased (comma-separated string)
+    - ai_recommendation (stringified safely as JSON)
+    - result ("Match" or "Not Quite")
+    - timestamp (ISO format UTC)
+    
+    Args:
+        order_id: str - Unique identifier for this order (UUID format)
+        items_purchased: str - Comma-separated cake names
+        ai_recommendation: dict or str - AI recommendation object or None
+        result: str - "Match" or "Not Quite"
+    
+    Returns:
+        tuple: (success: bool, error_msg: str or None)
+    """
+    try:
+        # Ensure data directory exists
+        data_dir = _BASE_DIR / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_path = data_dir / "feedback_log.csv"
+        
+        # Check if file exists and is not empty
+        file_exists = file_path.exists() and file_path.stat().st_size > 0
+        
+        # Safely convert ai_recommendation to string
+        if isinstance(ai_recommendation, dict):
+            # Use json.dumps for safe serialization of complex objects
+            ai_rec_str = json.dumps(ai_recommendation, ensure_ascii=False)
+        elif ai_recommendation is None:
+            ai_rec_str = "None"
+        else:
+            ai_rec_str = str(ai_recommendation)
+        
+        # Get timestamp in ISO format (UTC)
+        timestamp = datetime.utcnow().isoformat()
+        
+        # Write to CSV with proper encoding and newline handling
+        with open(file_path, mode='a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            
+            # Write header only if file doesn't exist or is empty
+            if not file_exists:
+                writer.writerow([
+                    'order_id',
+                    'items_purchased',
+                    'ai_recommendation',
+                    'result',
+                    'timestamp'
+                ])
+            
+            # Write data row
+            writer.writerow([
+                order_id,
+                items_purchased,
+                ai_rec_str,
+                result,
+                timestamp
+            ])
+        
+        print(f"✅ Order logged successfully: {order_id}")
+        return True, None
+        
+    except Exception as e:
+        error_msg = f"Order logging failed: {str(e)}"
+        print(f"❌ {error_msg}")
+        print(f"   Order ID: {order_id}")
+        import traceback
+        traceback.print_exc()
+        return False, error_msg
+
+
 def log_transaction(cart, recommended):
     """
-    Log transaction data to CSV for analytics.
+    DEPRECATED: Legacy function for backward compatibility.
+    Use save_order_data() instead.
+    
+    Logs transaction data to data/feedback_log.csv for analytics.
     Records: timestamp, items purchased, recommendation, match result.
     
     Args:
         cart: st.session_state.cart (list of dicts with 'name' and 'price')
-        recommended: st.session_state.ai_result (the AI recommendation)
+        recommended: st.session_state.ai_result (the AI recommendation dict)
     """
+    # Skip if no cart or recommendation
     if not cart or recommended is None:
-        return
+        return False
     
-    try:
-        from datetime import datetime
-        
-        # Extract purchased item names
-        purchased_names = [item['name'] for item in cart]
-        
-        # Handle different AI output formats for robustness
-        recommended_name = (
-            recommended['name']
-            if isinstance(recommended, dict)
-            else recommended
-        )
-        
-        # Determine match result
-        match_result = (
-            "Perfect Match"
-            if recommended_name in purchased_names
-            else "Not Quite"
-        )
-        
-        # Create data row
-        new_data = {
-            "timestamp": [datetime.now().isoformat()],
-            "items": [", ".join(purchased_names)],
-            "recommended": [recommended_name],
-            "feedback_type": [match_result]
-        }
-        
-        df = pd.DataFrame(new_data)
-        
-        # Ensure docs directory exists
-        docs_dir = _BASE_DIR / "docs"
-        docs_dir.mkdir(exist_ok=True)
-        
-        file_path = docs_dir / "order_analytics.csv"
-        
-        # Write with header only on first write
-        header = not file_path.exists()
-        
-        df.to_csv(file_path, mode='a', index=False, header=header)
+    # Generate unique order ID
+    order_id = str(uuid.uuid4())
     
-    except Exception as e:
-        # Silent failure - don't disrupt user experience
-        pass
+    # Extract purchased item names as comma-separated string
+    items_purchased = ", ".join([item['name'] for item in cart])
+    
+    # Save to CSV
+    success, error_msg = save_order_data(
+        order_id=order_id,
+        items_purchased=items_purchased,
+        ai_recommendation=recommended,
+        result="Match" if _is_recommendation_match(recommended, cart) else "Not Quite"
+    )
+    
+    return success
+
+
+def _is_recommendation_match(recommendation, cart):
+    """
+    Helper function to determine if AI recommendation matches purchase.
+    
+    Returns True if the top recommended cake was in the purchased items.
+    """
+    if not recommendation or not isinstance(recommendation, dict):
+        return False
+    
+    top_cake = recommendation.get('top_3_cakes', [None])[0]
+    if not top_cake:
+        return False
+    
+    purchased_names = [item['name'] for item in cart]
+    return top_cake in purchased_names
 
 # ============================================================================
 # DYNAMIC STORYTELLING / NARRATIVE GENERATION
@@ -879,23 +951,82 @@ def display_checkout():
         
         with col2:
             if st.button("Confirm Order", use_container_width=True, type='primary'):
-                # Guard against duplicate logging on reruns
-                if not st.session_state.order_logged:
-                    # Log transaction with implicit feedback
-                    log_transaction(
-                        st.session_state.cart,
-                        st.session_state.ai_result
-                    )
+                # ============================================================
+                # STEP 1: Validate cart is not empty
+                # ============================================================
+                if len(st.session_state.cart) == 0:
+                    st.warning("⚠️ Cannot confirm empty cart. Please add items first.")
+                else:
+                    # Guard against duplicate logging on reruns
+                    if not st.session_state.order_logged:
+                        # ====================================================
+                        # STEP 2: Generate unique order ID (ONCE per checkout)
+                        # ====================================================
+                        order_id = str(uuid.uuid4())
+                        
+                        # Format items purchased
+                        items_purchased = ", ".join([
+                            item['name'] for item in st.session_state.cart
+                        ])
+                        
+                        # Determine result (Match = top recomm in cart, else Not Quite)
+                        result = "Match" if _is_recommendation_match(
+                            st.session_state.ai_result,
+                            st.session_state.cart
+                        ) else "Not Quite"
+                        
+                        # ====================================================
+                        # STEP 3: Attempt to save order data
+                        # ====================================================
+                        save_success, error_msg = save_order_data(
+                            order_id=order_id,
+                            items_purchased=items_purchased,
+                            ai_recommendation=st.session_state.ai_result,
+                            result=result
+                        )
+                        
+                        # ====================================================
+                        # STEP 4: Handle success or failure (separately)
+                        # ====================================================
+                        if save_success:
+                            # Success: Mark as logged and show confirmation
+                            st.session_state.order_logged = True
+                            st.success(f"🎉 Order confirmed! Thank you for your purchase.\n\nOrder ID: {order_id}")
+                            
+                            # DEBUG MODE: Show last 3 rows of feedback log
+                            # ⚠️ REMOVE THIS IN PRODUCTION ⚠️
+                            try:
+                                feedback_df = pd.read_csv(_BASE_DIR / "data" / "feedback_log.csv")
+                                if len(feedback_df) > 0:
+                                    st.markdown("### 📊 Recent Orders (Debug Mode)")
+                                    st.dataframe(
+                                        feedback_df.tail(3),
+                                        use_container_width=True,
+                                        hide_index=True
+                                    )
+                                    st.caption("⚠️ Debug output - remove in production")
+                            except Exception as debug_error:
+                                # Silently fail debug display - doesn't affect checkout
+                                pass
+                        else:
+                            # Failure: Show error but DON'T clear cart
+                            st.error(
+                                f"❌ Order confirmation failed.\n\n"
+                                f"Your items are still in the basket. Please try again.\n\n"
+                                f"Error: {error_msg or 'Unknown error'}"
+                            )
+                            st.session_state.order_logged = False  # Reset flag
                     
-                    # Mark as logged
-                    st.session_state.order_logged = True
-                
-                # Clear cart and reset state
-                st.success("Order confirmed! Thank you for your purchase.")
-                st.session_state.cart = []
-                st.session_state.ai_result = None
-                st.session_state.has_generated = False
-                st.rerun()
+                    # ====================================================
+                    # STEP 5: Only clear cart if logging was successful
+                    # (Check flag to ensure save_order_data succeeded)
+                    # ====================================================
+                    if st.session_state.order_logged:
+                        st.session_state.cart = []
+                        st.session_state.ai_result = None
+                        st.session_state.has_generated = False
+                        st.balloons()
+                        st.rerun()
 
 # ============================================================================
 # MAIN PAGE ROUTING
@@ -945,7 +1076,7 @@ else:  # Store page
         
         with col_img_1:
             display_safe_image(
-                "assets/cafe_vibe.jpg",
+                str(_BASE_DIR / "assets" / "cafe_vibe.jpg"),
                 "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500&h=400&fit=crop",
                 "Café Atmosphere"
             )
@@ -962,14 +1093,14 @@ else:  # Store page
             st.markdown("""
             <div style='padding: 20px;'>
             <p style='font-size: 1.1em; line-height: 1.8; color: #4A4A4A;'>
-            Emotions shape taste. Our AI learns what draws you when you're happy, stressed, tired, or celebrating. Your mood and preferences refine every recommendation.
+            Emotions color every crumb... Your mood is the final ingredient in every creation we share.
             </p>
             </div>
             """, unsafe_allow_html=True)
         
         with col_img_2:
             display_safe_image(
-                "assets/cake_detail.jpg",
+                str(_BASE_DIR / "assets" / "cake_detail.jpg"),
                 "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=500&h=400&fit=crop",
                 "Cake Detail"
             )

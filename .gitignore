@@ -40,6 +40,9 @@ env/
 .streamlit/cache/
 .streamlit/*.cache
 
+# Database files (keep CSV for ML logging)
+data/*.db
+
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb

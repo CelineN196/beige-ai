@@ -116,7 +116,7 @@ def test_database_system():
     print("\nNext steps:")
     print("1. Run Streamlit app: streamlit run frontend/beige_ai_app.py")
     print("2. Run analytics dashboard: streamlit run frontend/analytics_dashboard.py")
-    print("3. View database at: beige_ai.db")
+    print("3. View database at: data/beige_ai.db")
     print("\n")
 
 
