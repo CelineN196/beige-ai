@@ -58,6 +58,9 @@ Thumbs.db
 
 # Project specific
 *.joblib
+# Exception: track models in /models for deployment
+!models/
+!models/*.joblib
 *.pkl
 *.pickle
 *.log

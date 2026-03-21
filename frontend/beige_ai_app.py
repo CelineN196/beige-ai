@@ -222,19 +222,19 @@ def fetch_weather_data(city="Da Nang, Vietnam"):
 @st.cache_resource
 def load_model():
     """Load the trained Random Forest model."""
-    model_path = _BASE_DIR / "backend" / "models" / "cake_model.joblib"
+    model_path = _BASE_DIR / "models" / "cake_model.joblib"
     return joblib.load(model_path)
 
 @st.cache_resource
 def load_preprocessor():
     """Load the ColumnTransformer preprocessor."""
-    preprocessor_path = _BASE_DIR / "backend" / "models" / "preprocessor.joblib"
+    preprocessor_path = _BASE_DIR / "models" / "preprocessor.joblib"
     return joblib.load(preprocessor_path)
 
 @st.cache_resource
 def load_feature_info():
     """Load feature information and metadata."""
-    feature_path = _BASE_DIR / "backend" / "models" / "feature_info.joblib"
+    feature_path = _BASE_DIR / "models" / "feature_info.joblib"
     return joblib.load(feature_path)
 
 @st.cache_resource
