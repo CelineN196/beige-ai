@@ -1,8 +1,7 @@
---no-cache-dir
-streamlit
-pandas==2.3.3
-numpy==2.0.0
-scikit-learn==1.5.1
+streamlit==1.33.0
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.3.2
 joblib==1.4.2
-pillow
-google-generativeai
+pillow==10.3.0
+google-generativeai==0.5.4
