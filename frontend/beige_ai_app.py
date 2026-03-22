@@ -1265,26 +1265,26 @@ else:  # Store page
         
         with col1:
             st.markdown("<div class='input-label'>Weather</div>", unsafe_allow_html=True)
-            st.metric("", st.session_state.weather_condition)
+            st.metric("", st.session_state.weather_condition, label_visibility="collapsed")
         
         with col2:
             st.markdown("<div class='input-label'>Temperature</div>", unsafe_allow_html=True)
-            st.metric("", f"{temperature_celsius}°C")
+            st.metric("", f"{temperature_celsius}°C", label_visibility="collapsed")
         
         with col3:
             st.markdown("<div class='input-label'>Humidity</div>", unsafe_allow_html=True)
-            st.metric("", f"{humidity}%")
+            st.metric("", f"{humidity}%", label_visibility="collapsed")
         
         col4, col5, col6 = st.columns(3)
         with col4:
             st.markdown("<div class='input-label'>Time of Day</div>", unsafe_allow_html=True)
-            st.metric("", st.session_state.time_of_day)
+            st.metric("", st.session_state.time_of_day, label_visibility="collapsed")
         with col5:
             st.markdown("<div class='input-label'>Air Quality</div>", unsafe_allow_html=True)
-            st.metric("", f"{air_quality_index} AQI")
+            st.metric("", f"{air_quality_index} AQI", label_visibility="collapsed")
         with col6:
             st.markdown("<div class='input-label'>Location</div>", unsafe_allow_html=True)
-            st.metric("", "Da Nang, Vietnam")
+            st.metric("", "Da Nang, Vietnam", label_visibility="collapsed")
 
     else:
         # Manual input mode
