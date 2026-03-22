@@ -149,43 +149,32 @@ img {
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# HEADER & AUTHENTICATION FUNCTIONS (Called during page render)
+# PERSISTENT HEADER (ALWAYS VISIBLE)
 # ============================================================================
 
-def render_header():
-    """Render persistent header with basket button."""
-    header_col1, header_col2 = st.columns([8, 2])
-    with header_col1:
-        st.markdown("<h1 style='margin: 0; padding: 10px 0; font-family: Playfair Display, serif; font-size: 2em;'>Beige AI</h1>", unsafe_allow_html=True)
-    with header_col2:
-        basket_count = len(st.session_state.cart)
-        if st.button(f"🛒 Basket ({basket_count})", key='header_basket', use_container_width=True):
-            st.session_state.page = 'checkout'
-            st.rerun()
+header_col1, header_col2 = st.columns([8, 2])
+with header_col1:
+    st.markdown("<h1 style='margin: 0; padding: 10px 0; font-family: Playfair Display, serif; font-size: 2em;'>Beige AI</h1>", unsafe_allow_html=True)
 
-def render_auth():
-    """Render analyst mode authentication in sidebar."""
-    password = st.sidebar.text_input("Admin Access", type="password", key="admin_password")
-    if password == "beige_admin":
-        st.session_state.analyst_mode = True
-    if st.session_state.analyst_mode:
-        st.sidebar.success("✓ Analyst Mode Enabled")
-    else:
-        st.session_state.analyst_mode = False
-    
-    # Model status in sidebar
-    with st.expander("🔧 Model Status (Debug)", expanded=False):
-        st.write(f"**Model Version:** {MODE}")
-        st.write(f"**Model Type:** {model.__class__.__name__}")
-        st.write(f"**Scikit-learn:** {sklearn.__version__}")
-        st.write(f"**NumPy:** {np.__version__}")
-        if xgboost_version:
-            st.write(f"**XGBoost:** {xgboost_version}")
-        st.write(f"**Label Encoder:** {'Loaded' if label_encoder else 'N/A'}")
-        if MODE == "V2":
-            st.success(f"✅ Running Beige AI V2 (XGBoost)")
-        else:
-            st.info(f"ℹ️ Running Beige AI V1 (Legacy)")
+with header_col2:
+    basket_count = len(st.session_state.cart)
+    if st.button(f"🛒 Basket ({basket_count})", key='header_basket', use_container_width=True):
+        st.session_state.page = 'checkout'
+        st.rerun()
+
+# ============================================================================
+# ANALYST MODE AUTHENTICATION
+# ============================================================================
+
+password = st.sidebar.text_input("Admin Access", type="password", key="admin_password")
+
+if password == "beige_admin":
+    st.session_state.analyst_mode = True
+
+if st.session_state.analyst_mode:
+    st.sidebar.success("✓ Analyst Mode Enabled")
+else:
+    st.session_state.analyst_mode = False
 
 def get_time_of_day():
     """Determine time of day from system time."""
@@ -231,94 +220,89 @@ def fetch_weather_data(city="Da Nang, Vietnam"):
         }
 
 # ============================================================================
-# SAFE MODEL LOADING WITH V2/V1 FALLBACK
-# Production-safe implementation using backend modules
+# SAFE ML LOADING - NEVER CRASHES THE APP
+# Graceful fallback with version detection and rule-based predictor
 # ============================================================================
 
-# Import production modules
-from model_loader import (
-    load_model_and_preprocessor_safe,
-    load_label_encoder_safe,
-    get_model_status,
+# Import ML compatibility layer with runtime version detection
+from ml_compatibility_wrapper import (
+    SafeMLLoader,
+    RuleBasedPredictor,
+    VersionInfo,
+    get_safe_ml_loader,
+    get_ml_status,
 )
-from feature_contract import get_feature_schema
 
 @st.cache_resource
-def load_all_models_safe():
-    """Load model, preprocessor, and label encoder using production modules.
+def load_ml_system():
+    """
+    Load ML system with safe fallback.
+    This NEVER crashes - returns working model or rule-based fallback.
     
     Returns:
-        (model, preprocessor, label_encoder, model_version)
+        (model, preprocessor, label_encoder, model_version, ml_status)
     """
-    try:
-        model, preprocessor, model_version = load_model_and_preprocessor_safe(verbose=True)
-        label_encoder = load_label_encoder_safe()
-        return model, preprocessor, label_encoder, model_version
-    except Exception as e:
-        st.error(f"❌ FATAL: Cannot load models. {str(e)}")
-        st.stop()
+    loader = get_safe_ml_loader()
+    model, preprocessor, label_encoder, version = loader.load()
+    status = loader.get_status_dict()
+    return model, preprocessor, label_encoder, version, status
 
 @st.cache_resource
-def load_feature_info_safe():
-    """
-    Load feature info with fallback option.
-    Returns: (feature_info, version)
-    """
-    try:
-        # Use feature contract from backend
-        schema = get_feature_schema()
-        feature_info = {
-            'classes': schema['classes'],
-            'features': schema['all']
-        }
-        return feature_info, "V2"
-    except Exception:
-        # Fallback to V1
-        try:
-            v1_path = _BASE_DIR / "models" / "feature_info.joblib"
-            feature_info = joblib.load(v1_path)
-            return feature_info, "V1"
-        except Exception as e:
-            raise RuntimeError(f"Cannot load feature info: {str(e)}")
+def get_cake_classes():
+    """Get list of cake classes. Works even if ML fails."""
+    return RuleBasedPredictor.CAKE_MENU
 
 @st.cache_resource
 def load_association_rules():
     """Load association rules for explanations."""
-    rules_path = _BASE_DIR / "backend" / "association_rules.csv"
-    return pd.read_csv(rules_path)
+    try:
+        rules_path = _BASE_DIR / "backend" / "association_rules.csv"
+        return pd.read_csv(rules_path)
+    except:
+        # Return empty dataframe if file doesn't exist
+        return pd.DataFrame()
 
-# Load all models with safe fallback system
-try:
-    model, preprocessor, label_encoder, MODEL_VERSION = load_all_models_safe()
-    feature_info, FEATURE_INFO_VERSION = load_feature_info_safe()
-    association_rules = load_association_rules()
-    
-    # Determine overall mode
-    MODE = MODEL_VERSION  # Use model version as primary indicator
-    PREPROCESSOR_VERSION = MODEL_VERSION  # Assume same version for model and preprocessor
-    
-except Exception as e:
-    st.error(f"🔴 FATAL: Cannot load models. {str(e)}")
-    st.stop()
+# Load ML system (SAFE - never crashes)
+model, preprocessor, label_encoder, MODEL_VERSION, ML_STATUS = load_ml_system()
+association_rules = load_association_rules()
+
+# Determine mode based on model version
+MODE = MODEL_VERSION
+CAKE_CLASSES = get_cake_classes()
 
 # ============================================================================
 # VERSION DIAGNOSTICS & STATUS DISPLAY
 # ============================================================================
-import sklearn
 
-# Silent version logging for debugging
-try:
-    model_type = model.__class__.__name__ if hasattr(model, '__class__') else "Unknown"
-    xgboost_version = ""
-    try:
-        import xgboost
-        xgboost_version = f"xgboost {xgboost.__version__}"
-    except:
-        pass
-except Exception:
-    pass
+# Display ML system status in sidebar
+with st.sidebar:
+    with st.expander("🔧 ML System Status (Debug)", expanded=False):
+        status = get_ml_status()
+        
+        # Status indicator
+        if status['load_status'] == 'SUCCESS':
+            st.success(f"✅ Model Loaded: {status['model_version']}")
+        elif status['load_status'] == 'FALLBACK':
+            st.warning(f"⚠️ Using Fallback: {status['model_version']}")
+        else:
+            st.info(f"ℹ️ Rule-Based Mode: {status['model_version']}")
+        
+        # Version information
+        st.write("**Versions:**")
+        for pkg, ver in status['versions'].items():
+            if ver != "NOT_INSTALLED":
+                st.write(f"- {pkg}: {ver}")
+            else:
+                st.write(f"- {pkg}: ⚠️ NOT INSTALLED")
+        
+        # Compatibility status
+        st.write(f"**Compatibility:** {status['compatibility_msg']}")
+        
+        # Load status details
+        st.write(f"**Load Status:** {status['load_status']}")
+        if status['load_error']:
+            st.write(f"**Error:** {status['load_error']}")
 
-# Model status: Shown in sidebar via render_auth()
 
 # ============================================================================
 # FEATURE ENGINEERING FUNCTIONS
@@ -907,7 +891,7 @@ def display_ai_recommendations():
         fig, ax = plt.subplots(figsize=(12, 5))
         
         all_indices = np.argsort(probabilities)[::-1]
-        all_cakes = [feature_info['classes'][i] for i in all_indices]
+        all_cakes = [CAKE_CLASSES[i] for i in all_indices]
         all_probs = [probabilities[i] for i in all_indices]
         
         cake_labels = []
@@ -1112,10 +1096,6 @@ def display_checkout():
 # ============================================================================
 # MAIN PAGE ROUTING
 # ============================================================================
-
-# Render persistent components on all pages
-render_header()
-render_auth()
 
 if st.session_state.page == 'checkout':
     display_checkout()
@@ -1364,64 +1344,54 @@ else:  # Store page
                 'season': [season]
             })
             
-            # Preprocess input
-            X_processed = preprocessor.transform(user_input)
+            # ================================================================
+            # SAFE PREDICTION WITH AUTOMATIC FALLBACK
+            # Tries ML model, falls back to rule-based if model unavailable
+            # ================================================================
             
-            # ================================================================
-            # SAFE PREDICTION WITH V2 XGBoost COMPATIBILITY
-            # ================================================================
-            try:
-                from sklearn.utils.validation import check_is_fitted
-                
-                # Validate model is fitted
-                check_is_fitted(model)
-                
-                # Validate input shape
-                expected_features = len(preprocessor.get_feature_names_out())
-                if X_processed.shape[1] != expected_features:
-                    raise ValueError(
-                        f"Input shape mismatch: got {X_processed.shape[1]} features, "
-                        f"expected {expected_features}"
-                    )
-                
-                # Make prediction with comprehensive error handling
+            probabilities = None
+            prediction_success = False
+            prediction_mode = "UNKNOWN"
+            
+            # Try ML-based prediction first
+            if model is not None and preprocessor is not None:
                 try:
-                    probabilities = model.predict_proba(X_processed)[0]
-                except AttributeError as e:
-                    # Handle version-specific errors
-                    if 'monotonic_cst' in str(e):
-                        st.error(
-                            "⚠️ Model-environment incompatibility detected\n\n"
-                            "The loaded model and scikit-learn version don't match.\n"
-                            "Please refresh the page or contact support."
+                    # Preprocess input
+                    X_processed = preprocessor.transform(user_input)
+                    
+                    # Validate input shape
+                    expected_features = len(preprocessor.get_feature_names_out())
+                    if X_processed.shape[1] != expected_features:
+                        raise ValueError(
+                            f"Input shape mismatch: got {X_processed.shape[1]} features, "
+                            f"expected {expected_features}"
                         )
-                    else:
-                        st.error(f"Model prediction failed: {str(e)}")
+                    
+                    # Make prediction
+                    probabilities = model.predict_proba(X_processed)[0]
+                    prediction_success = True
+                    prediction_mode = MODEL_VERSION
+                    
+                except Exception as e:
+                    # ML prediction failed - will fall back to rule-based
+                    prediction_mode = "FALLBACK"
+            
+            # If ML prediction failed or model unavailable, use rule-based predictor
+            if not prediction_success:
+                try:
+                    probabilities = RuleBasedPredictor.predict_proba(
+                        mood=mood,
+                        weather=st.session_state.weather_condition
+                    )
+                    prediction_success = True
+                    prediction_mode = "RULE_BASED"
+                except Exception as e:
+                    st.error(f"❌ Prediction failed: {str(e)}")
                     st.stop()
-                
-                # For V2 XGBoost, convert predictions to class names
-                if MODE == "V2" and label_encoder:
-                    try:
-                        # probabilities are already for each class
-                        pass  # No conversion needed
-                    except Exception as e:
-                        st.warning(f"Label encoding issue: {str(e)}")
-                
-            except Exception as e:
-                st.error(
-                    f"🔴 Prediction failed: {type(e).__name__}\n\n"
-                    f"Error: {str(e)}\n\n"
-                    f"Running {MODE} model with {sklearn.__version__}"
-                )
-                st.info(
-                    "This typically occurs when feature preprocessing doesn't match "
-                    "the training configuration."
-                )
-                st.stop()
             
             # Get top 3 recommendations
             top_3_indices = np.argsort(probabilities)[-3:][::-1]
-            top_3_cakes = [feature_info['classes'][i] for i in top_3_indices]
+            top_3_cakes = [CAKE_CLASSES[i] for i in top_3_indices]
             top_3_probs = [probabilities[i] for i in top_3_indices]
             
             # Save to session state
@@ -1431,7 +1401,8 @@ else:  # Store page
                 'probabilities': probabilities,
                 'mood': mood,
                 'weather_condition': st.session_state.weather_condition,
-                'model_version': MODE
+                'model_version': MODE,
+                'prediction_mode': prediction_mode
             }
             st.session_state.has_generated = True
             
@@ -1443,11 +1414,13 @@ else:  # Store page
                 cake=top_3_cakes[0]  # Use top recommendation
             )
             
-            # Show success with model version
-            if MODE == "V2":
-                st.success("✨ V2 model: Your personalized recommendations are ready.")
+            # Show success message with prediction mode
+            if prediction_mode == "RULE_BASED":
+                st.info(f"✨ Rule-based recommendations (ML model not available)")
+            elif prediction_mode == "FALLBACK":
+                st.info(f"✨ V1 model: Your personalized recommendations are ready.")
             else:
-                st.success("✨ V1 model: Your personalized recommendations are ready.")
+                st.success(f"✨ {MODEL_VERSION}: Your personalized recommendations are ready.")
 
 
     # ============================================================================
