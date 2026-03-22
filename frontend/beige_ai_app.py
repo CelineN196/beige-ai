@@ -226,14 +226,16 @@ def fetch_weather_data(city="Da Nang, Vietnam"):
 @st.cache_resource
 def load_model_safe():
     """
-    Safely load V2 or V1 model with fallback.
+    Safely load V2 FINAL (unified) or V1 model with fallback.
     Returns: (model, mode) where mode is "V2" or "V1"
     """
     try:
-        # Try V2 first (XGBoost)
-        v2_path = _BASE_DIR / "models" / "v2" / "best_model.pkl"
-        if v2_path.exists():
-            model = joblib.load(v2_path)
+        # Try V2 FINAL first (unified model with all components)
+        v2_final_path = _BASE_DIR / "models" / "v2_final_model.pkl"
+        if v2_final_path.exists():
+            unified = joblib.load(v2_final_path)
+            # Extract just the model component for compatibility
+            model = unified.get('model', unified)
             return model, "V2"
     except Exception as e:
         pass  # Fallback to V1
@@ -244,20 +246,22 @@ def load_model_safe():
         model = joblib.load(v1_path)
         return model, "V1"
     except Exception as e:
-        raise RuntimeError(f"❌ CRITICAL: Cannot load any model. V2: {v2_path.exists()}, Error: {str(e)}")
+        raise RuntimeError(f"❌ CRITICAL: Cannot load any model. V2: {v2_final_path.exists()}, Error: {str(e)}")
 
 @st.cache_resource
 def load_preprocessor_safe():
     """
-    Safely load V2 or V1 preprocessor with fallback.
+    Safely load V2 FINAL or V1 preprocessor with fallback.
     Returns: (preprocessor, version)
     """
     try:
-        # Try V2 first
-        v2_path = _BASE_DIR / "models" / "v2" / "preprocessor.pkl"
-        if v2_path.exists():
-            preprocessor = joblib.load(v2_path)
-            return preprocessor, "V2"
+        # Try V2 FINAL first (unified model)
+        v2_final_path = _BASE_DIR / "models" / "v2_final_model.pkl"
+        if v2_final_path.exists():
+            unified = joblib.load(v2_final_path)
+            preprocessor = unified.get('preprocessor')
+            if preprocessor is not None:
+                return preprocessor, "V2"
     except Exception:
         pass  # Fallback to V1
     
@@ -271,11 +275,15 @@ def load_preprocessor_safe():
 
 @st.cache_resource
 def load_label_encoder():
-    """Load V2 label encoder if available (for XGBoost classes)."""
+    """Load V2 FINAL label encoder if available (for XGBoost classes)."""
     try:
-        label_enc_path = _BASE_DIR / "models" / "v2" / "label_encoder.pkl"
-        if label_enc_path.exists():
-            return joblib.load(label_enc_path)
+        # Try V2 FINAL first (unified model)
+        v2_final_path = _BASE_DIR / "models" / "v2_final_model.pkl"
+        if v2_final_path.exists():
+            unified = joblib.load(v2_final_path)
+            label_enc = unified.get('label_encoder')
+            if label_enc is not None:
+                return label_enc
     except Exception:
         pass
     return None
@@ -283,20 +291,24 @@ def load_label_encoder():
 @st.cache_resource
 def load_feature_info_safe():
     """
-    Safely load feature info from V2 or V1 with fallback.
+    Safely load feature info from V2 FINAL or V1 with fallback.
     Returns: (feature_info, version)
     """
     try:
-        # Try V2 first (feature_names.json)
-        v2_features_path = _BASE_DIR / "models" / "v2" / "feature_names.json"
-        if v2_features_path.exists():
-            import json
-            with open(v2_features_path) as f:
-                feature_names = json.load(f)
+        # Try V2 FINAL first (metadata from unified model)
+        import json
+        v2_metadata_path = _BASE_DIR / "models" / "v2_metadata.json"
+        if v2_metadata_path.exists():
+            with open(v2_metadata_path) as f:
+                metadata = json.load(f)
+            
+            # Extract label names from label encoder
+            label_encoder = load_label_encoder()
+            classes = list(label_encoder.classes_) if label_encoder else ['Berry Garden Cake', 'Café Tiramisu', 'Citrus Cloud Cake', 'Dark Chocolate Sea Salt Cake', 'Earthy Wellness Cake', 'Korean Sesame Mini Bread', 'Matcha Zen Cake', 'Silk Cheesecake']
+            
             feature_info = {
-                'classes': ['Chocolate Cake', 'Vanilla Cake', 'Carrot Cake', 'Red Velvet Cake',
-                           'Cheesecake', 'Lemon Cake', 'Strawberry Cake', 'Chocolate Mousse'],
-                'features': feature_names
+                'classes': classes,
+                'features': metadata.get('feature_names', [])
             }
             return feature_info, "V2"
     except Exception:
@@ -1265,26 +1277,26 @@ else:  # Store page
         
         with col1:
             st.markdown("<div class='input-label'>Weather</div>", unsafe_allow_html=True)
-            st.metric("", st.session_state.weather_condition, label_visibility="collapsed")
+            st.metric("", st.session_state.weather_condition)
         
         with col2:
             st.markdown("<div class='input-label'>Temperature</div>", unsafe_allow_html=True)
-            st.metric("", f"{temperature_celsius}°C", label_visibility="collapsed")
+            st.metric("", f"{temperature_celsius}°C")
         
         with col3:
             st.markdown("<div class='input-label'>Humidity</div>", unsafe_allow_html=True)
-            st.metric("", f"{humidity}%", label_visibility="collapsed")
+            st.metric("", f"{humidity}%")
         
         col4, col5, col6 = st.columns(3)
         with col4:
             st.markdown("<div class='input-label'>Time of Day</div>", unsafe_allow_html=True)
-            st.metric("", st.session_state.time_of_day, label_visibility="collapsed")
+            st.metric("", st.session_state.time_of_day)
         with col5:
             st.markdown("<div class='input-label'>Air Quality</div>", unsafe_allow_html=True)
-            st.metric("", f"{air_quality_index} AQI", label_visibility="collapsed")
+            st.metric("", f"{air_quality_index} AQI")
         with col6:
             st.markdown("<div class='input-label'>Location</div>", unsafe_allow_html=True)
-            st.metric("", "Da Nang, Vietnam", label_visibility="collapsed")
+            st.metric("", "Da Nang, Vietnam")
 
     else:
         # Manual input mode
