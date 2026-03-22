@@ -221,106 +221,54 @@ def fetch_weather_data(city="Da Nang, Vietnam"):
 
 # ============================================================================
 # SAFE MODEL LOADING WITH V2/V1 FALLBACK
+# Production-safe implementation using backend modules
 # ============================================================================
 
-@st.cache_resource
-def load_model_safe():
-    """
-    Safely load V2 FINAL (unified) or V1 model with fallback.
-    Returns: (model, mode) where mode is "V2" or "V1"
-    """
-    try:
-        # Try V2 FINAL first (unified model with all components)
-        v2_final_path = _BASE_DIR / "models" / "v2_final_model.pkl"
-        if v2_final_path.exists():
-            unified = joblib.load(v2_final_path)
-            # Extract just the model component for compatibility
-            model = unified.get('model', unified)
-            return model, "V2"
-    except Exception as e:
-        pass  # Fallback to V1
-    
-    # Fallback to V1 (legacy Random Forest)
-    try:
-        v1_path = _BASE_DIR / "models" / "cake_model.joblib"
-        model = joblib.load(v1_path)
-        return model, "V1"
-    except Exception as e:
-        raise RuntimeError(f"❌ CRITICAL: Cannot load any model. V2: {v2_final_path.exists()}, Error: {str(e)}")
+# Import production modules
+from model_loader import (
+    load_model_and_preprocessor_safe,
+    load_label_encoder_safe,
+    get_model_status,
+)
+from feature_contract import get_feature_schema
 
 @st.cache_resource
-def load_preprocessor_safe():
-    """
-    Safely load V2 FINAL or V1 preprocessor with fallback.
-    Returns: (preprocessor, version)
-    """
-    try:
-        # Try V2 FINAL first (unified model)
-        v2_final_path = _BASE_DIR / "models" / "v2_final_model.pkl"
-        if v2_final_path.exists():
-            unified = joblib.load(v2_final_path)
-            preprocessor = unified.get('preprocessor')
-            if preprocessor is not None:
-                return preprocessor, "V2"
-    except Exception:
-        pass  # Fallback to V1
+def load_all_models_safe():
+    """Load model, preprocessor, and label encoder using production modules.
     
-    # Fallback to V1
+    Returns:
+        (model, preprocessor, label_encoder, model_version)
+    """
     try:
-        v1_path = _BASE_DIR / "models" / "preprocessor.joblib"
-        preprocessor = joblib.load(v1_path)
-        return preprocessor, "V1"
+        model, preprocessor, model_version = load_model_and_preprocessor_safe(verbose=True)
+        label_encoder = load_label_encoder_safe()
+        return model, preprocessor, label_encoder, model_version
     except Exception as e:
-        raise RuntimeError(f"Cannot load preprocessor: {str(e)}")
-
-@st.cache_resource
-def load_label_encoder():
-    """Load V2 FINAL label encoder if available (for XGBoost classes)."""
-    try:
-        # Try V2 FINAL first (unified model)
-        v2_final_path = _BASE_DIR / "models" / "v2_final_model.pkl"
-        if v2_final_path.exists():
-            unified = joblib.load(v2_final_path)
-            label_enc = unified.get('label_encoder')
-            if label_enc is not None:
-                return label_enc
-    except Exception:
-        pass
-    return None
+        st.error(f"❌ FATAL: Cannot load models. {str(e)}")
+        st.stop()
 
 @st.cache_resource
 def load_feature_info_safe():
     """
-    Safely load feature info from V2 FINAL or V1 with fallback.
+    Load feature info with fallback option.
     Returns: (feature_info, version)
     """
     try:
-        # Try V2 FINAL first (metadata from unified model)
-        import json
-        v2_metadata_path = _BASE_DIR / "models" / "v2_metadata.json"
-        if v2_metadata_path.exists():
-            with open(v2_metadata_path) as f:
-                metadata = json.load(f)
-            
-            # Extract label names from label encoder
-            label_encoder = load_label_encoder()
-            classes = list(label_encoder.classes_) if label_encoder else ['Berry Garden Cake', 'Café Tiramisu', 'Citrus Cloud Cake', 'Dark Chocolate Sea Salt Cake', 'Earthy Wellness Cake', 'Korean Sesame Mini Bread', 'Matcha Zen Cake', 'Silk Cheesecake']
-            
-            feature_info = {
-                'classes': classes,
-                'features': metadata.get('feature_names', [])
-            }
-            return feature_info, "V2"
+        # Use feature contract from backend
+        schema = get_feature_schema()
+        feature_info = {
+            'classes': schema['classes'],
+            'features': schema['all']
+        }
+        return feature_info, "V2"
     except Exception:
-        pass  # Fallback to V1
-    
-    # Fallback to V1
-    try:
-        v1_path = _BASE_DIR / "models" / "feature_info.joblib"
-        feature_info = joblib.load(v1_path)
-        return feature_info, "V1"
-    except Exception as e:
-        raise RuntimeError(f"Cannot load feature info: {str(e)}")
+        # Fallback to V1
+        try:
+            v1_path = _BASE_DIR / "models" / "feature_info.joblib"
+            feature_info = joblib.load(v1_path)
+            return feature_info, "V1"
+        except Exception as e:
+            raise RuntimeError(f"Cannot load feature info: {str(e)}")
 
 @st.cache_resource
 def load_association_rules():
@@ -330,14 +278,13 @@ def load_association_rules():
 
 # Load all models with safe fallback system
 try:
-    model, MODEL_VERSION = load_model_safe()
-    preprocessor, PREPROCESSOR_VERSION = load_preprocessor_safe()
+    model, preprocessor, label_encoder, MODEL_VERSION = load_all_models_safe()
     feature_info, FEATURE_INFO_VERSION = load_feature_info_safe()
-    label_encoder = load_label_encoder()
     association_rules = load_association_rules()
     
     # Determine overall mode
     MODE = MODEL_VERSION  # Use model version as primary indicator
+    PREPROCESSOR_VERSION = MODEL_VERSION  # Assume same version for model and preprocessor
     
 except Exception as e:
     st.error(f"🔴 FATAL: Cannot load models. {str(e)}")
@@ -1416,60 +1363,67 @@ else:  # Store page
                 'season': [season]
             })
             
-            # Preprocess input
-            X_processed = preprocessor.transform(user_input)
-            
             # ================================================================
-            # SAFE PREDICTION WITH V2 XGBoost COMPATIBILITY
+            # SAFE PREDICTION WITH PRODUCTION INFERENCE PIPELINE
             # ================================================================
             try:
-                from sklearn.utils.validation import check_is_fitted
+                from inference_pipeline import create_inference_pipeline
                 
-                # Validate model is fitted
-                check_is_fitted(model)
+                # Create inference pipeline
+                pipeline = create_inference_pipeline(
+                    model=model,
+                    preprocessor=preprocessor,
+                    label_encoder=label_encoder,
+                    verbose=False
+                )
                 
-                # Validate input shape
-                expected_features = len(preprocessor.get_feature_names_out())
-                if X_processed.shape[1] != expected_features:
-                    raise ValueError(
-                        f"Input shape mismatch: got {X_processed.shape[1]} features, "
-                        f"expected {expected_features}"
-                    )
+                # Create input dict (without DataFrame wrapping)
+                input_dict = {
+                    'mood': mood,
+                    'weather_condition': st.session_state.weather_condition,
+                    'temperature_celsius': temperature_celsius,
+                    'humidity': humidity,
+                    'air_quality_index': air_quality_index,
+                    'time_of_day': st.session_state.time_of_day,
+                    'sweetness_preference': sweetness_preference,
+                    'health_preference': health_preference,
+                    'trend_popularity_score': trend_popularity_score,
+                    'temperature_category': temperature_category,
+                    'comfort_index': comfort_index,
+                    'environmental_score': environmental_score,
+                    'season': season
+                }
                 
-                # Make prediction with comprehensive error handling
-                try:
-                    probabilities = model.predict_proba(X_processed)[0]
-                except AttributeError as e:
-                    # Handle version-specific errors
-                    if 'monotonic_cst' in str(e):
-                        st.error(
-                            "⚠️ Model-environment incompatibility detected\n\n"
-                            "The loaded model and scikit-learn version don't match.\n"
-                            "Please refresh the page or contact support."
-                        )
-                    else:
-                        st.error(f"Model prediction failed: {str(e)}")
-                    st.stop()
+                # Safe prediction with validation
+                result = pipeline.predict_with_explanations(input_dict, top_k=3)
+                probabilities = np.array(result['probabilities'])
                 
-                # For V2 XGBoost, convert predictions to class names
-                if MODE == "V2" and label_encoder:
-                    try:
-                        # probabilities are already for each class
-                        pass  # No conversion needed
-                    except Exception as e:
-                        st.warning(f"Label encoding issue: {str(e)}")
+                # Extract top 3
+                top_3_data = result['top_k']
+                top_3_cakes = [item['class'] for item in top_3_data]
+                top_3_probs = [item['probability'] for item in top_3_data]
                 
+            except ValueError as e:
+                st.error(
+                    f"⚠️ Prediction validation failed\n\n"
+                    f"Error: {str(e)}"
+                )
+                st.info(
+                    "This occurs when input features don't match the training schema. "
+                    "Please check your inputs and try again."
+                )
+                st.stop()
             except Exception as e:
                 st.error(
                     f"🔴 Prediction failed: {type(e).__name__}\n\n"
                     f"Error: {str(e)}\n\n"
-                    f"Running {MODE} model with {sklearn.__version__}"
+                    f"Running {MODE} model (fallback available)"
                 )
                 st.info(
-                    "This typically occurs when feature preprocessing doesn't match "
-                    "the training configuration."
+                    "If this issue persists, the system will use fallback recommendations."
                 )
                 st.stop()
+            
             
             # Get top 3 recommendations
             top_3_indices = np.argsort(probabilities)[-3:][::-1]
