@@ -219,23 +219,96 @@ def fetch_weather_data(city="Da Nang, Vietnam"):
             'aqi': 65
         }
 
-@st.cache_resource
-def load_model():
-    """Load the trained Random Forest model."""
-    model_path = _BASE_DIR / "models" / "cake_model.joblib"
-    return joblib.load(model_path)
+# ============================================================================
+# SAFE MODEL LOADING WITH V2/V1 FALLBACK
+# ============================================================================
 
 @st.cache_resource
-def load_preprocessor():
-    """Load the ColumnTransformer preprocessor."""
-    preprocessor_path = _BASE_DIR / "models" / "preprocessor.joblib"
-    return joblib.load(preprocessor_path)
+def load_model_safe():
+    """
+    Safely load V2 or V1 model with fallback.
+    Returns: (model, mode) where mode is "V2" or "V1"
+    """
+    try:
+        # Try V2 first (XGBoost)
+        v2_path = _BASE_DIR / "models" / "v2" / "best_model.pkl"
+        if v2_path.exists():
+            model = joblib.load(v2_path)
+            return model, "V2"
+    except Exception as e:
+        pass  # Fallback to V1
+    
+    # Fallback to V1 (legacy Random Forest)
+    try:
+        v1_path = _BASE_DIR / "models" / "cake_model.joblib"
+        model = joblib.load(v1_path)
+        return model, "V1"
+    except Exception as e:
+        raise RuntimeError(f"❌ CRITICAL: Cannot load any model. V2: {v2_path.exists()}, Error: {str(e)}")
 
 @st.cache_resource
-def load_feature_info():
-    """Load feature information and metadata."""
-    feature_path = _BASE_DIR / "models" / "feature_info.joblib"
-    return joblib.load(feature_path)
+def load_preprocessor_safe():
+    """
+    Safely load V2 or V1 preprocessor with fallback.
+    Returns: (preprocessor, version)
+    """
+    try:
+        # Try V2 first
+        v2_path = _BASE_DIR / "models" / "v2" / "preprocessor.pkl"
+        if v2_path.exists():
+            preprocessor = joblib.load(v2_path)
+            return preprocessor, "V2"
+    except Exception:
+        pass  # Fallback to V1
+    
+    # Fallback to V1
+    try:
+        v1_path = _BASE_DIR / "models" / "preprocessor.joblib"
+        preprocessor = joblib.load(v1_path)
+        return preprocessor, "V1"
+    except Exception as e:
+        raise RuntimeError(f"Cannot load preprocessor: {str(e)}")
+
+@st.cache_resource
+def load_label_encoder():
+    """Load V2 label encoder if available (for XGBoost classes)."""
+    try:
+        label_enc_path = _BASE_DIR / "models" / "v2" / "label_encoder.pkl"
+        if label_enc_path.exists():
+            return joblib.load(label_enc_path)
+    except Exception:
+        pass
+    return None
+
+@st.cache_resource
+def load_feature_info_safe():
+    """
+    Safely load feature info from V2 or V1 with fallback.
+    Returns: (feature_info, version)
+    """
+    try:
+        # Try V2 first (feature_names.json)
+        v2_features_path = _BASE_DIR / "models" / "v2" / "feature_names.json"
+        if v2_features_path.exists():
+            import json
+            with open(v2_features_path) as f:
+                feature_names = json.load(f)
+            feature_info = {
+                'classes': ['Chocolate Cake', 'Vanilla Cake', 'Carrot Cake', 'Red Velvet Cake',
+                           'Cheesecake', 'Lemon Cake', 'Strawberry Cake', 'Chocolate Mousse'],
+                'features': feature_names
+            }
+            return feature_info, "V2"
+    except Exception:
+        pass  # Fallback to V1
+    
+    # Fallback to V1
+    try:
+        v1_path = _BASE_DIR / "models" / "feature_info.joblib"
+        feature_info = joblib.load(v1_path)
+        return feature_info, "V1"
+    except Exception as e:
+        raise RuntimeError(f"Cannot load feature info: {str(e)}")
 
 @st.cache_resource
 def load_association_rules():
@@ -243,22 +316,53 @@ def load_association_rules():
     rules_path = _BASE_DIR / "backend" / "association_rules.csv"
     return pd.read_csv(rules_path)
 
-model = load_model()
-preprocessor = load_preprocessor()
-feature_info = load_feature_info()
-association_rules = load_association_rules()
+# Load all models with safe fallback system
+try:
+    model, MODEL_VERSION = load_model_safe()
+    preprocessor, PREPROCESSOR_VERSION = load_preprocessor_safe()
+    feature_info, FEATURE_INFO_VERSION = load_feature_info_safe()
+    label_encoder = load_label_encoder()
+    association_rules = load_association_rules()
+    
+    # Determine overall mode
+    MODE = MODEL_VERSION  # Use model version as primary indicator
+    
+except Exception as e:
+    st.error(f"🔴 FATAL: Cannot load models. {str(e)}")
+    st.stop()
 
 # ============================================================================
-# VERSION DIAGNOSTICS (for production debugging)
+# VERSION DIAGNOSTICS & STATUS DISPLAY
 # ============================================================================
 import sklearn
+
+# Silent version logging for debugging
 try:
-    if hasattr(model, '__class__'):
-        st.write(f"DEBUG: Model type: {model.__class__.__name__}")
-    st.write(f"DEBUG: sklearn version: {sklearn.__version__}")
-    st.write(f"DEBUG: numpy version: {np.__version__}")
-except Exception as e:
-    pass  # Silent fail for diagnostics
+    model_type = model.__class__.__name__ if hasattr(model, '__class__') else "Unknown"
+    xgboost_version = ""
+    try:
+        import xgboost
+        xgboost_version = f"xgboost {xgboost.__version__}"
+    except:
+        pass
+except Exception:
+    pass
+
+# Model status: Show in sidebar if debug enabled
+with st.sidebar:
+    with st.expander("🔧 Model Status (Debug)", expanded=False):
+        st.write(f"**Model Version:** {MODE}")
+        st.write(f"**Model Type:** {model.__class__.__name__}")
+        st.write(f"**Scikit-learn:** {sklearn.__version__}")
+        st.write(f"**NumPy:** {np.__version__}")
+        if xgboost_version:
+            st.write(f"**XGBoost:** {xgboost_version}")
+        st.write(f"**Label Encoder:** {'Loaded' if label_encoder else 'N/A'}")
+        if MODE == "V2":
+            st.success(f"✅ Running Beige AI V2 (XGBoost)")
+        else:
+            st.info(f"ℹ️ Running Beige AI V1 (Legacy)")
+
 
 # ============================================================================
 # FEATURE ENGINEERING FUNCTIONS
@@ -1303,7 +1407,9 @@ else:  # Store page
             # Preprocess input
             X_processed = preprocessor.transform(user_input)
             
-            # Get predictions with safety checks
+            # ================================================================
+            # SAFE PREDICTION WITH V2 XGBoost COMPATIBILITY
+            # ================================================================
             try:
                 from sklearn.utils.validation import check_is_fitted
                 
@@ -1311,24 +1417,46 @@ else:  # Store page
                 check_is_fitted(model)
                 
                 # Validate input shape
-                if X_processed.shape[1] != len(preprocessor.get_feature_names_out()):
-                    raise ValueError(f"Input shape mismatch: got {X_processed.shape[1]}, expected {len(preprocessor.get_feature_names_out())}")
+                expected_features = len(preprocessor.get_feature_names_out())
+                if X_processed.shape[1] != expected_features:
+                    raise ValueError(
+                        f"Input shape mismatch: got {X_processed.shape[1]} features, "
+                        f"expected {expected_features}"
+                    )
                 
-                # Make predictions
-                probabilities = model.predict_proba(X_processed)[0]
-                
-            except AttributeError as e:
-                if 'monotonic_cst' in str(e):
-                    st.error("⚠️ Model-environment mismatch detected (sklearn version incompatibility)")
-                    st.error("The model was trained with a different scikit-learn version.")
-                    st.error("Please contact support or retrain the model in the current environment.")
+                # Make prediction with comprehensive error handling
+                try:
+                    probabilities = model.predict_proba(X_processed)[0]
+                except AttributeError as e:
+                    # Handle version-specific errors
+                    if 'monotonic_cst' in str(e):
+                        st.error(
+                            "⚠️ Model-environment incompatibility detected\n\n"
+                            "The loaded model and scikit-learn version don't match.\n"
+                            "Please refresh the page or contact support."
+                        )
+                    else:
+                        st.error(f"Model prediction failed: {str(e)}")
                     st.stop()
-                else:
-                    raise
+                
+                # For V2 XGBoost, convert predictions to class names
+                if MODE == "V2" and label_encoder:
+                    try:
+                        # probabilities are already for each class
+                        pass  # No conversion needed
+                    except Exception as e:
+                        st.warning(f"Label encoding issue: {str(e)}")
+                
             except Exception as e:
-                st.error("🔴 Prediction failed due to model/environment mismatch")
-                st.error(f"Error: {type(e).__name__}: {str(e)}")
-                st.info("This typically occurs when scikit-learn versions don't match between training and deployment.")
+                st.error(
+                    f"🔴 Prediction failed: {type(e).__name__}\n\n"
+                    f"Error: {str(e)}\n\n"
+                    f"Running {MODE} model with {sklearn.__version__}"
+                )
+                st.info(
+                    "This typically occurs when feature preprocessing doesn't match "
+                    "the training configuration."
+                )
                 st.stop()
             
             # Get top 3 recommendations
@@ -1342,7 +1470,8 @@ else:  # Store page
                 'top_3_probs': top_3_probs,
                 'probabilities': probabilities,
                 'mood': mood,
-                'weather_condition': st.session_state.weather_condition
+                'weather_condition': st.session_state.weather_condition,
+                'model_version': MODE
             }
             st.session_state.has_generated = True
             
@@ -1354,7 +1483,12 @@ else:  # Store page
                 cake=top_3_cakes[0]  # Use top recommendation
             )
             
-            st.success("✨ Your personalized recommendations are ready.")
+            # Show success with model version
+            if MODE == "V2":
+                st.success("✨ V2 model: Your personalized recommendations are ready.")
+            else:
+                st.success("✨ V1 model: Your personalized recommendations are ready.")
+
 
     # ============================================================================
     # PERSISTENT AI RESULT DISPLAY
