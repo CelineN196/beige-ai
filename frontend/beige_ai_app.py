@@ -242,10 +242,23 @@ def load_association_rules():
     """Load association rules for explanations."""
     rules_path = _BASE_DIR / "backend" / "association_rules.csv"
     return pd.read_csv(rules_path)
+
 model = load_model()
 preprocessor = load_preprocessor()
 feature_info = load_feature_info()
 association_rules = load_association_rules()
+
+# ============================================================================
+# VERSION DIAGNOSTICS (for production debugging)
+# ============================================================================
+import sklearn
+try:
+    if hasattr(model, '__class__'):
+        st.write(f"DEBUG: Model type: {model.__class__.__name__}")
+    st.write(f"DEBUG: sklearn version: {sklearn.__version__}")
+    st.write(f"DEBUG: numpy version: {np.__version__}")
+except Exception as e:
+    pass  # Silent fail for diagnostics
 
 # ============================================================================
 # FEATURE ENGINEERING FUNCTIONS
@@ -1290,8 +1303,33 @@ else:  # Store page
             # Preprocess input
             X_processed = preprocessor.transform(user_input)
             
-            # Get predictions
-            probabilities = model.predict_proba(X_processed)[0]
+            # Get predictions with safety checks
+            try:
+                from sklearn.utils.validation import check_is_fitted
+                
+                # Validate model is fitted
+                check_is_fitted(model)
+                
+                # Validate input shape
+                if X_processed.shape[1] != len(preprocessor.get_feature_names_out()):
+                    raise ValueError(f"Input shape mismatch: got {X_processed.shape[1]}, expected {len(preprocessor.get_feature_names_out())}")
+                
+                # Make predictions
+                probabilities = model.predict_proba(X_processed)[0]
+                
+            except AttributeError as e:
+                if 'monotonic_cst' in str(e):
+                    st.error("⚠️ Model-environment mismatch detected (sklearn version incompatibility)")
+                    st.error("The model was trained with a different scikit-learn version.")
+                    st.error("Please contact support or retrain the model in the current environment.")
+                    st.stop()
+                else:
+                    raise
+            except Exception as e:
+                st.error("🔴 Prediction failed due to model/environment mismatch")
+                st.error(f"Error: {type(e).__name__}: {str(e)}")
+                st.info("This typically occurs when scikit-learn versions don't match between training and deployment.")
+                st.stop()
             
             # Get top 3 recommendations
             top_3_indices = np.argsort(probabilities)[-3:][::-1]
