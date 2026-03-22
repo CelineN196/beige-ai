@@ -149,32 +149,43 @@ img {
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# PERSISTENT HEADER (ALWAYS VISIBLE)
+# HEADER & AUTHENTICATION FUNCTIONS (Called during page render)
 # ============================================================================
 
-header_col1, header_col2 = st.columns([8, 2])
-with header_col1:
-    st.markdown("<h1 style='margin: 0; padding: 10px 0; font-family: Playfair Display, serif; font-size: 2em;'>Beige AI</h1>", unsafe_allow_html=True)
+def render_header():
+    """Render persistent header with basket button."""
+    header_col1, header_col2 = st.columns([8, 2])
+    with header_col1:
+        st.markdown("<h1 style='margin: 0; padding: 10px 0; font-family: Playfair Display, serif; font-size: 2em;'>Beige AI</h1>", unsafe_allow_html=True)
+    with header_col2:
+        basket_count = len(st.session_state.cart)
+        if st.button(f"🛒 Basket ({basket_count})", key='header_basket', use_container_width=True):
+            st.session_state.page = 'checkout'
+            st.rerun()
 
-with header_col2:
-    basket_count = len(st.session_state.cart)
-    if st.button(f"🛒 Basket ({basket_count})", key='header_basket', use_container_width=True):
-        st.session_state.page = 'checkout'
-        st.rerun()
-
-# ============================================================================
-# ANALYST MODE AUTHENTICATION
-# ============================================================================
-
-password = st.sidebar.text_input("Admin Access", type="password", key="admin_password")
-
-if password == "beige_admin":
-    st.session_state.analyst_mode = True
-
-if st.session_state.analyst_mode:
-    st.sidebar.success("✓ Analyst Mode Enabled")
-else:
-    st.session_state.analyst_mode = False
+def render_auth():
+    """Render analyst mode authentication in sidebar."""
+    password = st.sidebar.text_input("Admin Access", type="password", key="admin_password")
+    if password == "beige_admin":
+        st.session_state.analyst_mode = True
+    if st.session_state.analyst_mode:
+        st.sidebar.success("✓ Analyst Mode Enabled")
+    else:
+        st.session_state.analyst_mode = False
+    
+    # Model status in sidebar
+    with st.expander("🔧 Model Status (Debug)", expanded=False):
+        st.write(f"**Model Version:** {MODE}")
+        st.write(f"**Model Type:** {model.__class__.__name__}")
+        st.write(f"**Scikit-learn:** {sklearn.__version__}")
+        st.write(f"**NumPy:** {np.__version__}")
+        if xgboost_version:
+            st.write(f"**XGBoost:** {xgboost_version}")
+        st.write(f"**Label Encoder:** {'Loaded' if label_encoder else 'N/A'}")
+        if MODE == "V2":
+            st.success(f"✅ Running Beige AI V2 (XGBoost)")
+        else:
+            st.info(f"ℹ️ Running Beige AI V1 (Legacy)")
 
 def get_time_of_day():
     """Determine time of day from system time."""
@@ -307,21 +318,7 @@ try:
 except Exception:
     pass
 
-# Model status: Show in sidebar if debug enabled
-with st.sidebar:
-    with st.expander("🔧 Model Status (Debug)", expanded=False):
-        st.write(f"**Model Version:** {MODE}")
-        st.write(f"**Model Type:** {model.__class__.__name__}")
-        st.write(f"**Scikit-learn:** {sklearn.__version__}")
-        st.write(f"**NumPy:** {np.__version__}")
-        if xgboost_version:
-            st.write(f"**XGBoost:** {xgboost_version}")
-        st.write(f"**Label Encoder:** {'Loaded' if label_encoder else 'N/A'}")
-        if MODE == "V2":
-            st.success(f"✅ Running Beige AI V2 (XGBoost)")
-        else:
-            st.info(f"ℹ️ Running Beige AI V1 (Legacy)")
-
+# Model status: Shown in sidebar via render_auth()
 
 # ============================================================================
 # FEATURE ENGINEERING FUNCTIONS
@@ -1116,6 +1113,10 @@ def display_checkout():
 # MAIN PAGE ROUTING
 # ============================================================================
 
+# Render persistent components on all pages
+render_header()
+render_auth()
+
 if st.session_state.page == 'checkout':
     display_checkout()
 
@@ -1363,67 +1364,60 @@ else:  # Store page
                 'season': [season]
             })
             
+            # Preprocess input
+            X_processed = preprocessor.transform(user_input)
+            
             # ================================================================
-            # SAFE PREDICTION WITH PRODUCTION INFERENCE PIPELINE
+            # SAFE PREDICTION WITH V2 XGBoost COMPATIBILITY
             # ================================================================
             try:
-                from inference_pipeline import create_inference_pipeline
+                from sklearn.utils.validation import check_is_fitted
                 
-                # Create inference pipeline
-                pipeline = create_inference_pipeline(
-                    model=model,
-                    preprocessor=preprocessor,
-                    label_encoder=label_encoder,
-                    verbose=False
-                )
+                # Validate model is fitted
+                check_is_fitted(model)
                 
-                # Create input dict (without DataFrame wrapping)
-                input_dict = {
-                    'mood': mood,
-                    'weather_condition': st.session_state.weather_condition,
-                    'temperature_celsius': temperature_celsius,
-                    'humidity': humidity,
-                    'air_quality_index': air_quality_index,
-                    'time_of_day': st.session_state.time_of_day,
-                    'sweetness_preference': sweetness_preference,
-                    'health_preference': health_preference,
-                    'trend_popularity_score': trend_popularity_score,
-                    'temperature_category': temperature_category,
-                    'comfort_index': comfort_index,
-                    'environmental_score': environmental_score,
-                    'season': season
-                }
+                # Validate input shape
+                expected_features = len(preprocessor.get_feature_names_out())
+                if X_processed.shape[1] != expected_features:
+                    raise ValueError(
+                        f"Input shape mismatch: got {X_processed.shape[1]} features, "
+                        f"expected {expected_features}"
+                    )
                 
-                # Safe prediction with validation
-                result = pipeline.predict_with_explanations(input_dict, top_k=3)
-                probabilities = np.array(result['probabilities'])
+                # Make prediction with comprehensive error handling
+                try:
+                    probabilities = model.predict_proba(X_processed)[0]
+                except AttributeError as e:
+                    # Handle version-specific errors
+                    if 'monotonic_cst' in str(e):
+                        st.error(
+                            "⚠️ Model-environment incompatibility detected\n\n"
+                            "The loaded model and scikit-learn version don't match.\n"
+                            "Please refresh the page or contact support."
+                        )
+                    else:
+                        st.error(f"Model prediction failed: {str(e)}")
+                    st.stop()
                 
-                # Extract top 3
-                top_3_data = result['top_k']
-                top_3_cakes = [item['class'] for item in top_3_data]
-                top_3_probs = [item['probability'] for item in top_3_data]
+                # For V2 XGBoost, convert predictions to class names
+                if MODE == "V2" and label_encoder:
+                    try:
+                        # probabilities are already for each class
+                        pass  # No conversion needed
+                    except Exception as e:
+                        st.warning(f"Label encoding issue: {str(e)}")
                 
-            except ValueError as e:
-                st.error(
-                    f"⚠️ Prediction validation failed\n\n"
-                    f"Error: {str(e)}"
-                )
-                st.info(
-                    "This occurs when input features don't match the training schema. "
-                    "Please check your inputs and try again."
-                )
-                st.stop()
             except Exception as e:
                 st.error(
                     f"🔴 Prediction failed: {type(e).__name__}\n\n"
                     f"Error: {str(e)}\n\n"
-                    f"Running {MODE} model (fallback available)"
+                    f"Running {MODE} model with {sklearn.__version__}"
                 )
                 st.info(
-                    "If this issue persists, the system will use fallback recommendations."
+                    "This typically occurs when feature preprocessing doesn't match "
+                    "the training configuration."
                 )
                 st.stop()
-            
             
             # Get top 3 recommendations
             top_3_indices = np.argsort(probabilities)[-3:][::-1]
