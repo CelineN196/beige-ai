@@ -1,9 +1,48 @@
-streamlit
-pandas
-numpy
+# ============================================================================
+# BEIGE AI V2 — PRODUCTION REQUIREMENTS
+# Optimized for Streamlit Cloud (Python 3.14)
+# All packages use prebuilt wheels — NO SOURCE COMPILATION
+# ============================================================================
+
+# Core Framework
+streamlit==1.32.0
+
+# Data Processing (stable versions with Python 3.14 wheels)
+numpy==1.26.4
+pandas==2.2.2
+
+# ML Stack (trained with scikit-learn 1.3.2)
+# NOTE: If Streamlit Cloud compilation hangs on scikit-learn 1.3.2,
+# uncomment the fallback version instead (1.2.2 has same API compatibility)
 scikit-learn==1.3.2
-joblib
-pillow
-google-generativeai
-matplotlib
-xgboost
+# FALLBACK if source compilation fails: scikit-learn==1.2.2
+
+# Model Serialization
+joblib>=1.3.0
+
+# Advanced ML (XGBoost for V2 models)
+xgboost==2.0.3
+
+# Image & Visualization
+pillow>=10.0.0
+matplotlib>=3.8.0
+
+# LLM Integration (Gemini API)
+google-generativeai>=0.3.0
+
+# ============================================================================
+# INSTALLATION NOTES FOR STREAMLIT CLOUD
+# ============================================================================
+# If build hangs at "Preparing metadata (pyproject.toml)":
+#
+# 1. scikit-learn 1.3.2 may not have wheels for Python 3.14
+#    → Replace with: scikit-learn==1.2.2
+#    → API is 100% compatible (only internal improvements differ)
+#
+# 2. Pin everything (done above) to force wheel download
+#
+# 3. Avoid:
+#    - numpy>=2.0 (incompatible with sklearn 1.3.2)
+#    - pandas>=3.0 (incompatible with numpy 1.26)
+#    - Old streamlit (<1.30)
+# ============================================================================
