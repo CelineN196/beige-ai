@@ -79,7 +79,7 @@ if _DEBUG_ENABLED:
     
     st.write("---")
 
-from menu_config import CAKE_MENU, CAKE_CATEGORIES
+from menu_config import CAKE_MENU, CAKE_CATEGORIES, get_cake_info
 
 # Create full menu structure with prices
 FULL_MENU = [
@@ -853,7 +853,8 @@ def display_full_menu():
         with col:
             cake_name = cake['name']
             cake_price = cake['price']
-            cake_props = CAKE_CATEGORIES.get(cake_name, {})
+            # Use robust lookup with fallback
+            cake_props = get_cake_info(cake_name)
             
             menu_item_html = f"""
             <div style='
@@ -932,11 +933,12 @@ def display_ai_recommendations():
     
     for idx, (cake, prob) in enumerate(zip(top_3_cakes, top_3_probs)):
         with rec_cols[idx]:
-            cake_props = CAKE_CATEGORIES.get(cake, {})
-            category = cake_props.get('category', 'N/A')
-            flavor = cake_props.get('flavor_profile', 'N/A')
-            sweetness = cake_props.get('sweetness_level', 0)
-            health = cake_props.get('health_score', 0)
+            # Use robust lookup with fallback
+            cake_props = get_cake_info(cake)
+            category = cake_props.get('category', 'Signature')
+            flavor = cake_props.get('flavor_profile', 'Balanced')
+            sweetness = cake_props.get('sweetness_level', 5)
+            health = cake_props.get('health_score', 5)
             
             # Find price from FULL_MENU
             cake_price = next((c['price'] for c in FULL_MENU if c['name'] == cake), 45.00)

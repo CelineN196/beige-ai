@@ -79,6 +79,55 @@ CAKE_CATEGORIES = {
         "flavor_profile": "Nutty & Light",
         "sweetness_level": 2,
         "health_score": 6
+    },
+    # ===== Fallback cake metadata (for rule-based predictor) =====
+    "Chocolate Cake": {
+        "category": "Indulgent",
+        "flavor_profile": "Rich & Decadent",
+        "sweetness_level": 8,
+        "health_score": 2
+    },
+    "Vanilla Cake": {
+        "category": "Classic",
+        "flavor_profile": "Smooth & Versatile",
+        "sweetness_level": 7,
+        "health_score": 5
+    },
+    "Lemon Cake": {
+        "category": "Refreshing",
+        "flavor_profile": "Bright & Citrus",
+        "sweetness_level": 6,
+        "health_score": 7
+    },
+    "Strawberry Cheesecake": {
+        "category": "Fruity",
+        "flavor_profile": "Creamy & Fresh",
+        "sweetness_level": 8,
+        "health_score": 4
+    },
+    "Carrot Cake": {
+        "category": "Health-Conscious",
+        "flavor_profile": "Warm & Spiced",
+        "sweetness_level": 6,
+        "health_score": 8
+    },
+    "Black Forest Cake": {
+        "category": "Indulgent",
+        "flavor_profile": "Rich & Elegant",
+        "sweetness_level": 8,
+        "health_score": 2
+    },
+    "Tiramisu Cake": {
+        "category": "Energizing",
+        "flavor_profile": "Coffee & Cocoa",
+        "sweetness_level": 7,
+        "health_score": 5
+    },
+    "Red Velvet Cake": {
+        "category": "Elegant",
+        "flavor_profile": "Velvety & Subtle",
+        "sweetness_level": 7,
+        "health_score": 3
     }
 }
 
@@ -146,3 +195,88 @@ def validate_menu():
 _is_valid, _missing = validate_menu()
 if not _is_valid:
     print(f"⚠️  Warning: Missing properties for cakes: {_missing}")
+
+# ============================================================================
+# NORMALIZED CAKE METADATA LOOKUP
+# ============================================================================
+
+def _normalize_name(name: str) -> str:
+    """
+    Normalize cake name for case-insensitive, whitespace-safe lookup.
+    
+    Handles:
+    - Converts to lowercase
+    - Strips leading/trailing whitespace
+    - Collapses multiple spaces into single space
+    - Handles tabs and other whitespace characters
+    
+    Args:
+        name: Cake name to normalize
+        
+    Returns:
+        Normalized name (lowercase, whitespace-collapsed)
+    """
+    # Strip and convert to lowercase
+    name = name.strip().lower()
+    # Collapse multiple whitespace characters into single space
+    name = ' '.join(name.split())
+    return name
+
+# Build normalized lookup table (lazily cached)
+_normalized_cake_data = None
+
+def _build_normalized_cache():
+    """Build normalized lookup table from CAKE_CATEGORIES."""
+    global _normalized_cake_data
+    if _normalized_cake_data is None:
+        _normalized_cake_data = {
+            _normalize_name(k): v for k, v in CAKE_CATEGORIES.items()
+        }
+    return _normalized_cake_data
+
+def get_cake_info(cake_name: str) -> dict:
+    """
+    Get cake metadata with robust fallback.
+    
+    Handles:
+    - Case differences (Chocolate vs CHOCOLATE vs ChOcOlAtE)
+    - Extra whitespace (Chocolate Cake  vs Chocolate Cake)
+    - Missing metadata (returns defaults)
+    
+    Args:
+        cake_name: Name of the cake (any case, may have extra spaces)
+        
+    Returns:
+        dict: Cake metadata with keys:
+            - category: str (default: "Signature")
+            - flavor_profile: str (default: "Balanced")
+            - sweetness_level: int (default: 5)
+            - health_score: int (default: 5)
+            
+    Example:
+        >>> info = get_cake_info("chocolate cake")
+        >>> print(info['category'])
+        'Indulgent'
+        >>> print(info['flavor_profile'])
+        'Rich & Decadent'
+    """
+    # Normalize input
+    normalized_key = _normalize_name(cake_name)
+    
+    # Build cache if needed
+    cache = _build_normalized_cache()
+    
+    # Try direct lookup
+    if normalized_key in cache:
+        return cache[normalized_key]
+    
+    # Log missing match (for debugging)
+    print(f"[WARN] Missing metadata for cake: '{cake_name}' (normalized: '{normalized_key}')")
+    
+    # Return safe defaults
+    return {
+        "category": "Signature",
+        "flavor_profile": "Balanced",
+        "sweetness_level": 5,
+        "health_score": 5
+    }
