@@ -102,161 +102,151 @@ print(f"  ✓ Target classes: {df[TARGET].nunique()}")
 # PREPROCESSING
 # ============================================================================
 
-print(f"\n[PREPROCESS] Building preprocessing pipeline...")
-
-X = df[CATEGORICAL_FEATURES + NUMERICAL_FEATURES]
-y = df[TARGET]
-
-# Encode target
-label_encoder = LabelEncoder()
-y_encoded = label_encoder.fit_transform(y)
-
-print(f"  ✓ Classes: {list(label_encoder.classes_)}")
-print(f"  ✓ Encoded mapping: {dict(zip(range(len(label_encoder.classes_)), label_encoder.classes_))}")
-
-# Build preprocessor
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('categorical', 
-         OneHotEncoder(sparse_output=False, handle_unknown='ignore'),
-         CATEGORICAL_FEATURES),
-        ('numerical',
-         StandardScaler(),
-         NUMERICAL_FEATURES)
-    ],
-    remainder='passthrough'
-)
-
-# Train/val/test split
-X_temp, X_test, y_temp, y_test = train_test_split(
-    X, y_encoded, test_size=0.2, random_state=RANDOM_STATE, stratify=y_encoded
-)
-X_train, X_val, y_train, y_val = train_test_split(
-    X_temp, y_temp, test_size=0.25, random_state=RANDOM_STATE, stratify=y_temp
-)
-
-print(f"\n[SPLIT] Train/val/test split:")
-print(f"  ✓ Train: {X_train.shape[0]} ({100*X_train.shape[0]/len(X):.1f}%)")
-print(f"  ✓ Val:   {X_val.shape[0]} ({100*X_val.shape[0]/len(X):.1f}%)")
-print(f"  ✓ Test:  {X_test.shape[0]} ({100*X_test.shape[0]/len(X):.1f}%)")
-
-# Fit preprocessor on training data
-X_train_processed = preprocessor.fit_transform(X_train)
-X_val_processed = preprocessor.transform(X_val)
-X_test_processed = preprocessor.transform(X_test)
-
-# Get feature names
-feature_names_cat = preprocessor.named_transformers_['categorical'].get_feature_names_out(
-    CATEGORICAL_FEATURES
-).tolist()
-all_feature_names = feature_names_cat + NUMERICAL_FEATURES
-
-print(f"  ✓ Features after encoding: {len(all_feature_names)}")
-print(f"    - Categorical: {len(feature_names_cat)}")
-print(f"    - Numerical: {len(NUMERICAL_FEATURES)}")
-
-# ============================================================================
-# MODEL TRAINING
-# ============================================================================
-
-print(f"\n[TRAIN] XGBoost with exact installed version {xgboost.__version__}...")
-
-model = XGBClassifier(
-    n_estimators=200,
-    max_depth=5,
-    learning_rate=0.1,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    random_state=RANDOM_STATE,
-    eval_metric='mlogloss',
-    verbosity=0,
-    n_jobs=-1
-)
-
-model.fit(
-    X_train_processed, y_train,
-    eval_set=[(X_val_processed, y_val)],
-    verbose=False
-)
-
-# ============================================================================
-# VALIDATION
-# ============================================================================
-
-print(f"\n[VALIDATE] Model predictions on validation set...")
-
-y_val_pred = model.predict(X_val_processed)
-y_val_pred_proba = model.predict_proba(X_val_processed)
-
-val_metrics = {
-    'val_accuracy': float(accuracy_score(y_val, y_val_pred)),
-    'val_f1_weighted': float(f1_score(y_val, y_val_pred, average='weighted')),
-    'val_log_loss': float(log_loss(y_val, y_val_pred_proba))
-}
-
-print(f"  ✓ Validation accuracy: {val_metrics['val_accuracy']:.4f}")
-print(f"  ✓ Validation F1 (weighted): {val_metrics['val_f1_weighted']:.4f}")
-print(f"  ✓ Validation log loss: {val_metrics['val_log_loss']:.4f}")
-
-print(f"\n[VALIDATE] Model predictions on test set...")
-
-y_test_pred = model.predict(X_test_processed)
-y_test_pred_proba = model.predict_proba(X_test_processed)
-
-test_metrics = {
-    'test_accuracy': float(accuracy_score(y_test, y_test_pred)),
-    'test_f1_weighted': float(f1_score(y_test, y_test_pred, average='weighted')),
-    'test_log_loss': float(log_loss(y_test, y_test_pred_proba))
-}
-
-print(f"  ✓ Test accuracy: {test_metrics['test_accuracy']:.4f}")
-print(f"  ✓ Test F1 (weighted): {test_metrics['test_f1_weighted']:.4f}")
-print(f"  ✓ Test log loss: {test_metrics['test_log_loss']:.4f}")
-
-# Verify predict_proba works
-print(f"\n[VALIDATE] Testing predict_proba output...")
-test_sample = X_val_processed[:1]
-proba = model.predict_proba(test_sample)
-print(f"  ✓ Proba shape: {proba.shape}")
-print(f"  ✓ Proba sum across classes: {proba[0].sum():.4f} (should be ~1.0)")
-print(f"  ✓ Sample probabilities: {proba[0][:3]}")
-
-# ============================================================================
-# SAVE ARTIFACTS
-# ============================================================================
-
-print(f"\n[SAVE] Saving all artifacts...")
-
-# Save unified final model to standardized location
-model_path = MODELS_DIR / "model.pkl"
-joblib.dump({
-    'model': model,
-    'preprocessor': preprocessor,
-    'label_encoder': label_encoder,
-    'feature_names': all_feature_names,
-    'categorical_features': CATEGORICAL_FEATURES,
-    'numerical_features': NUMERICAL_FEATURES,
-    'metrics': {**val_metrics, **test_metrics},
-    'training_env': {
-        'sklearn_version': sklearn.__version__,
-        'xgboost_version': xgboost.__version__,
-        'numpy_version': numpy.__version__,
-        'pandas_version': pd.__version__,
-        'joblib_version': joblib.__version__
+def train_model(verbose=True):
+    """
+    Train V2 XGBoost model for cake classification.
+    
+    This function is designed for both standalone training and deployment-side
+    auto-retraining if model loading fails.
+    
+    Returns:
+        dict: Contains 'model', 'preprocessor', 'label_encoder', and metadata
+    """
+    
+    if verbose:
+        print(f"\n[PREPROCESS] Building preprocessing pipeline...")
+    
+    X = df[CATEGORICAL_FEATURES + NUMERICAL_FEATURES]
+    y = df[TARGET]
+    
+    # Encode target
+    label_encoder = LabelEncoder()
+    y_encoded = label_encoder.fit_transform(y)
+    
+    if verbose:
+        print(f"  ✓ Classes: {list(label_encoder.classes_)}")
+        print(f"  ✓ Encoded mapping: {dict(zip(range(len(label_encoder.classes_)), label_encoder.classes_))}")
+    
+    # Build preprocessor
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('categorical', 
+             OneHotEncoder(sparse_output=False, handle_unknown='ignore'),
+             CATEGORICAL_FEATURES),
+            ('numerical',
+             StandardScaler(),
+             NUMERICAL_FEATURES)
+        ],
+        remainder='passthrough'
+    )
+    
+    # Train/val/test split
+    X_temp, X_test, y_temp, y_test = train_test_split(
+        X, y_encoded, test_size=0.2, random_state=RANDOM_STATE, stratify=y_encoded
+    )
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_temp, y_temp, test_size=0.25, random_state=RANDOM_STATE, stratify=y_temp
+    )
+    
+    if verbose:
+        print(f"\n[SPLIT] Train/val/test split:")
+        print(f"  ✓ Train: {X_train.shape[0]} ({100*X_train.shape[0]/len(X):.1f}%)")
+        print(f"  ✓ Val:   {X_val.shape[0]} ({100*X_val.shape[0]/len(X):.1f}%)")
+        print(f"  ✓ Test:  {X_test.shape[0]} ({100*X_test.shape[0]/len(X):.1f}%)")
+    
+    # Fit preprocessor on training data
+    X_train_processed = preprocessor.fit_transform(X_train)
+    X_val_processed = preprocessor.transform(X_val)
+    X_test_processed = preprocessor.transform(X_test)
+    
+    # Get feature names
+    feature_names_cat = preprocessor.named_transformers_['categorical'].get_feature_names_out(
+        CATEGORICAL_FEATURES
+    ).tolist()
+    all_feature_names = feature_names_cat + NUMERICAL_FEATURES
+    
+    if verbose:
+        print(f"  ✓ Features after encoding: {len(all_feature_names)}")
+        print(f"    - Categorical: {len(feature_names_cat)}")
+        print(f"    - Numerical: {len(NUMERICAL_FEATURES)}")
+    
+    # ============================================================================
+    # MODEL TRAINING
+    # ============================================================================
+    
+    if verbose:
+        print(f"\n[TRAIN] XGBoost with exact installed version {xgboost.__version__}...")
+    
+    model = XGBClassifier(
+        n_estimators=200,
+        max_depth=5,
+        learning_rate=0.1,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=RANDOM_STATE,
+        eval_metric='mlogloss',
+        verbosity=0,
+        n_jobs=-1
+    )
+    
+    model.fit(
+        X_train_processed, y_train,
+        eval_set=[(X_val_processed, y_val)],
+        verbose=False
+    )
+    
+    # ============================================================================
+    # VALIDATION
+    # ============================================================================
+    
+    if verbose:
+        print(f"\n[VALIDATE] Model predictions on validation set...")
+    
+    y_val_pred = model.predict(X_val_processed)
+    y_val_pred_proba = model.predict_proba(X_val_processed)
+    
+    val_metrics = {
+        'val_accuracy': float(accuracy_score(y_val, y_val_pred)),
+        'val_f1_weighted': float(f1_score(y_val, y_val_pred, average='weighted')),
+        'val_log_loss': float(log_loss(y_val, y_val_pred_proba))
     }
-}, model_path)
-
-print(f"  ✓ Model saved: {model_path}")
-print(f"    Size: {model_path.stat().st_size / 1024 / 1024:.2f} MB")
-
-# Also save individual artifacts for debugging (optional)
-joblib.dump(model, MODELS_DIR / "v2_xgboost_model.pkl")
-joblib.dump(preprocessor, MODELS_DIR / "v2_preprocessor.pkl")
-joblib.dump(label_encoder, MODELS_DIR / "v2_label_encoder.pkl")
-
-# Save metadata
-with open(MODELS_DIR / "v2_metadata.json", 'w') as f:
-    json.dump({
+    
+    if verbose:
+        print(f"  ✓ Validation accuracy: {val_metrics['val_accuracy']:.4f}")
+        print(f"  ✓ Validation F1 (weighted): {val_metrics['val_f1_weighted']:.4f}")
+        print(f"  ✓ Validation log loss: {val_metrics['val_log_loss']:.4f}")
+    
+    if verbose:
+        print(f"\n[VALIDATE] Model predictions on test set...")
+    
+    y_test_pred = model.predict(X_test_processed)
+    y_test_pred_proba = model.predict_proba(X_test_processed)
+    
+    test_metrics = {
+        'test_accuracy': float(accuracy_score(y_test, y_test_pred)),
+        'test_f1_weighted': float(f1_score(y_test, y_test_pred, average='weighted')),
+        'test_log_loss': float(log_loss(y_test, y_test_pred_proba))
+    }
+    
+    if verbose:
+        print(f"  ✓ Test accuracy: {test_metrics['test_accuracy']:.4f}")
+        print(f"  ✓ Test F1 (weighted): {test_metrics['test_f1_weighted']:.4f}")
+        print(f"  ✓ Test log loss: {test_metrics['test_log_loss']:.4f}")
+    
+    # Verify predict_proba works
+    if verbose:
+        print(f"\n[VALIDATE] Testing predict_proba output...")
+        test_sample = X_val_processed[:1]
+        proba = model.predict_proba(test_sample)
+        print(f"  ✓ Proba shape: {proba.shape}")
+        print(f"  ✓ Proba sum across classes: {proba[0].sum():.4f} (should be ~1.0)")
+        print(f"  ✓ Sample probabilities: {proba[0][:3]}")
+    
+    # Return dict with all required components
+    model_dict = {
+        'model': model,
+        'preprocessor': preprocessor,
+        'label_encoder': label_encoder,
         'feature_names': all_feature_names,
         'categorical_features': CATEGORICAL_FEATURES,
         'numerical_features': NUMERICAL_FEATURES,
@@ -268,60 +258,157 @@ with open(MODELS_DIR / "v2_metadata.json", 'w') as f:
             'pandas_version': pd.__version__,
             'joblib_version': joblib.__version__
         }
-    }, f, indent=2)
+    }
+    
+    return model_dict
+
 
 # ============================================================================
-# LOAD & VERIFY
+# STANDALONE EXECUTION
 # ============================================================================
 
-print(f"\n[VERIFY] Loading saved model to verify compatibility...")
+if __name__ == "__main__":
+    print(f"\n[PREPROCESS] Building preprocessing pipeline...")
 
-try:
-    loaded = joblib.load(model_path)
-    loaded_model = loaded['model']
-    loaded_preprocessor = loaded['preprocessor']
-    loaded_encoder = loaded['label_encoder']
+    X = df[CATEGORICAL_FEATURES + NUMERICAL_FEATURES]
+    y = df[TARGET]
 
-    # Test with same validation sample
-    test_val = X_val_processed[:5]
-    predictions = loaded_model.predict(test_val)
-    probas = loaded_model.predict_proba(test_val)
+    # Encode target
+    label_encoder = LabelEncoder()
+    y_encoded = label_encoder.fit_transform(y)
 
-    print(f"  ✓ Model loaded successfully from {model_path}")
-    print(f"  ✓ Predictions shape: {predictions.shape}")
-    print(f"  ✓ Probabilities shape: {probas.shape}")
-    print(f"  ✓ Sample predictions: {predictions[:3]}")
-    print(f"  ✓ Training env from disk:")
-    print(f"    - sklearn: {loaded['training_env']['sklearn_version']}")
-    print(f"    - xgboost: {loaded['training_env']['xgboost_version']}")
-    print(f"    - numpy: {loaded['training_env']['numpy_version']}")
-    print(f"\n✅ MODEL SAVED AND VERIFIED SUCCESSFULLY")
-except Exception as e:
-    print(f"  ❌ CRITICAL: Model load verification failed!")
-    print(f"     Error: {str(e)}")
-    raise
+    print(f"  ✓ Classes: {list(label_encoder.classes_)}")
+    print(f"  ✓ Encoded mapping: {dict(zip(range(len(label_encoder.classes_)), label_encoder.classes_))}")
 
-# ============================================================================
-# FINAL SUMMARY
-# ============================================================================
+    # Build preprocessor
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('categorical', 
+             OneHotEncoder(sparse_output=False, handle_unknown='ignore'),
+             CATEGORICAL_FEATURES),
+            ('numerical',
+             StandardScaler(),
+             NUMERICAL_FEATURES)
+        ],
+        remainder='passthrough'
+    )
 
-print("\n" + "="*70)
-print("✅ V2 MODEL RETRAINING COMPLETE")
-print("="*70)
+    # Train/val/test split
+    X_temp, X_test, y_temp, y_test = train_test_split(
+        X, y_encoded, test_size=0.2, random_state=RANDOM_STATE, stratify=y_encoded
+    )
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_temp, y_temp, test_size=0.25, random_state=RANDOM_STATE, stratify=y_temp
+    )
 
-print(f"\n📊 FINAL PERFORMANCE METRICS:")
-print(f"  Validation Accuracy: {val_metrics['val_accuracy']:.4f}")
-print(f"  Test Accuracy:       {test_metrics['test_accuracy']:.4f}")
-print(f"  Test F1 (weighted):  {test_metrics['test_f1_weighted']:.4f}")
+    print(f"\n[SPLIT] Train/val/test split:")
+    print(f"  ✓ Train: {X_train.shape[0]} ({100*X_train.shape[0]/len(X):.1f}%)")
+    print(f"  ✓ Val:   {X_val.shape[0]} ({100*X_val.shape[0]/len(X):.1f}%)")
+    print(f"  ✓ Test:  {X_test.shape[0]} ({100*X_test.shape[0]/len(X):.1f}%)")
 
-print(f"\n📦 PRODUCTION MODEL SAVED TO:")
-print(f"  → {model_path}")
+    # Fit preprocessor on training data
+    X_train_processed = preprocessor.fit_transform(X_train)
+    X_val_processed = preprocessor.transform(X_val)
+    X_test_processed = preprocessor.transform(X_test)
 
-print(f"\n🔒 ENVIRONMENT LOCKED IN:")
-print(f"  scikit-learn: {sklearn.__version__}")
-print(f"  xgboost: {xgboost.__version__}")
-print(f"  numpy: {numpy.__version__}")
-print(f"  pandas: {pd.__version__}")
+    # Get feature names
+    feature_names_cat = preprocessor.named_transformers_['categorical'].get_feature_names_out(
+        CATEGORICAL_FEATURES
+    ).tolist()
+    all_feature_names = feature_names_cat + NUMERICAL_FEATURES
+
+    print(f"  ✓ Features after encoding: {len(all_feature_names)}")
+    print(f"    - Categorical: {len(feature_names_cat)}")
+    print(f"    - Numerical: {len(NUMERICAL_FEATURES)}")
+
+    # Train using the function
+    print(f"\n[MAIN] Calling train_model() function...")
+    model_dict = train_model(verbose=True)
+    
+    model = model_dict['model']
+    val_metrics = {k: v for k, v in model_dict['metrics'].items() if k.startswith('val_')}
+    test_metrics = {k: v for k, v in model_dict['metrics'].items() if k.startswith('test_')}
+
+    # ============================================================================
+    # SAVE ARTIFACTS
+    # ============================================================================
+
+    print(f"\n[SAVE] Saving all artifacts...")
+
+    # Save unified final model to standardized location
+    model_path = MODELS_DIR / "model.pkl"
+    joblib.dump(model_dict, model_path)
+
+    print(f"  ✓ Model saved: {model_path}")
+    print(f"    Size: {model_path.stat().st_size / 1024 / 1024:.2f} MB")
+
+    # Also save individual artifacts for debugging (optional)
+    joblib.dump(model, MODELS_DIR / "v2_xgboost_model.pkl")
+    joblib.dump(model_dict['preprocessor'], MODELS_DIR / "v2_preprocessor.pkl")
+    joblib.dump(model_dict['label_encoder'], MODELS_DIR / "v2_label_encoder.pkl")
+
+    # Save metadata
+    with open(MODELS_DIR / "v2_metadata.json", 'w') as f:
+        json.dump({
+            'feature_names': model_dict['feature_names'],
+            'categorical_features': model_dict['categorical_features'],
+            'numerical_features': model_dict['numerical_features'],
+            'metrics': model_dict['metrics'],
+            'training_env': model_dict['training_env']
+        }, f, indent=2)
+
+    # ============================================================================
+    # LOAD & VERIFY
+    # ============================================================================
+
+    print(f"\n[VERIFY] Loading saved model to verify compatibility...")
+
+    try:
+        loaded = joblib.load(model_path)
+        loaded_model = loaded['model']
+        loaded_preprocessor = loaded['preprocessor']
+        loaded_encoder = loaded['label_encoder']
+
+        # Test with same validation sample
+        test_val = X_val_processed[:5]
+        predictions = loaded_model.predict(test_val)
+        probas = loaded_model.predict_proba(test_val)
+
+        print(f"  ✓ Model loaded successfully from {model_path}")
+        print(f"  ✓ Predictions shape: {predictions.shape}")
+        print(f"  ✓ Probabilities shape: {probas.shape}")
+        print(f"  ✓ Sample predictions: {predictions[:3]}")
+        print(f"  ✓ Training env from disk:")
+        print(f"    - sklearn: {loaded['training_env']['sklearn_version']}")
+        print(f"    - xgboost: {loaded['training_env']['xgboost_version']}")
+        print(f"    - numpy: {loaded['training_env']['numpy_version']}")
+        print(f"\n✅ MODEL SAVED AND VERIFIED SUCCESSFULLY")
+    except Exception as e:
+        print(f"  ❌ CRITICAL: Model load verification failed!")
+        print(f"     Error: {str(e)}")
+        raise
+
+    # ============================================================================
+    # FINAL SUMMARY
+    # ============================================================================
+
+    print("\n" + "="*70)
+    print("✅ V2 MODEL RETRAINING COMPLETE")
+    print("="*70)
+
+    print(f"\n📊 FINAL PERFORMANCE METRICS:")
+    print(f"  Validation Accuracy: {val_metrics['val_accuracy']:.4f}")
+    print(f"  Test Accuracy:       {test_metrics['test_accuracy']:.4f}")
+    print(f"  Test F1 (weighted):  {test_metrics['test_f1_weighted']:.4f}")
+
+    print(f"\n📦 PRODUCTION MODEL SAVED TO:")
+    print(f"  → {model_path}")
+
+    print(f"\n🔒 ENVIRONMENT LOCKED IN:")
+    print(f"  scikit-learn: {sklearn.__version__}")
+    print(f"  xgboost: {xgboost.__version__}")
+    print(f"  numpy: {numpy.__version__}")
+    print(f"  pandas: {pd.__version__}")
 print(f"  joblib: {joblib.__version__}")
 
 print(f"\n✨ Model is DEPLOYMENT READY for Streamlit Cloud\n")

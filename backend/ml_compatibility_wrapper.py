@@ -189,14 +189,51 @@ class SafeMLLoader:
                 import traceback
                 traceback.print_exc()
                 self.load_error = f"V2 load failed: {str(e)}"
-                # IMPORTANT: Do NOT continue to V1 if V2 file exists but failed
-                # This is a critical error that should be exposed
-                print(f"[ML_LOADER] ⚠️  V2 model exists but failed to load. NOT falling back to V1.")
-                print(f"[ML_LOADER] This indicates a critical incompatibility issue.")
-                self.model_version = "ERROR_V2_LOAD_FAILED"
-                self.load_status = "ERROR"
-                print(f"[ML_LOADER] ========================================\n")
-                return None, None, None, self.model_version
+                
+                # ========================================
+                # SELF-HEALING: ATTEMPT AUTOMATIC RETRAINING
+                # ========================================
+                print(f"\n[ML_LOADER] 🔧 SELF-HEALING ACTIVATION")
+                print(f"[ML_LOADER] Attempting automatic model retraining...")
+                
+                try:
+                    # Import the training function
+                    from retrain_v2_final import train_model
+                    print(f"[ML_LOADER] ✅ Successfully imported train_model()")
+                    
+                    # Retrain the model silently (verbose=False for deployment)
+                    print(f"[ML_LOADER] Starting model retraining...")
+                    model_dict = train_model(verbose=False)
+                    
+                    print(f"[ML_LOADER] ✅ Model retrained successfully")
+                    print(f"[ML_LOADER] Saving retrained model to {v2_path}...")
+                    
+                    # Save the retrained model
+                    joblib.dump(model_dict, str(v2_path))
+                    print(f"[ML_LOADER] ✅ Retrained model saved to {v2_path}")
+                    
+                    # Extract components
+                    self.model = model_dict.get('model')
+                    self.preprocessor = model_dict.get('preprocessor')
+                    self.label_encoder = model_dict.get('label_encoder')
+                    
+                    # Set version to indicate retraining occurred
+                    self.model_version = "V2_RETRAINED"
+                    self.load_status = "RETRAINED"
+                    self.load_error = None
+                    
+                    print(f"[ML_LOADER] ✅ SELF-HEALING SUCCESSFUL")
+                    print(f"[ML_LOADER] Model version set to: {self.model_version}")
+                    print(f"[ML_LOADER] ========================================\n")
+                    return self.model, self.preprocessor, self.label_encoder, self.model_version
+                    
+                except Exception as retrain_error:
+                    print(f"[ML_LOADER] ❌ SELF-HEALING FAILED: {retrain_error}")
+                    import traceback
+                    traceback.print_exc()
+                    self.load_error = f"V2 load failed AND retrain failed: {str(retrain_error)}"
+                    print(f"[ML_LOADER] ⚠️  Falling back to V1 or rule-based predictor")
+                    # Continue to V1 fallback below
         else:
             print(f"[ML_LOADER] V2 model file not found or empty at {v2_path}")
             print(f"[ML_LOADER] File size: {os.path.getsize(str(v2_path)) if os.path.exists(str(v2_path)) else 'N/A'}")
