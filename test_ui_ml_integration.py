@@ -18,9 +18,10 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-# Add backend to path
+# Add backend and frontend to path for imports
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR / "backend"))
+sys.path.insert(0, str(BASE_DIR / "frontend"))
 
 from ml_compatibility_wrapper import RuleBasedPredictor
 from menu_config import CAKE_MENU

@@ -27,17 +27,10 @@ import google.generativeai as genai
 import uuid
 import csv
 
-# Add backend directory to path for imports (handles both local and deployment)
+# menu_config.py is now in the same directory (frontend/)
+# No sys.path hacking needed for local imports
+# But we still need _BASE_DIR for other file operations
 _BASE_DIR = Path(__file__).resolve().parent.parent
-_BACKEND_DIR = str(_BASE_DIR / "backend")
-
-# Ensure backend is in path for menu_config import
-if _BACKEND_DIR not in sys.path:
-    sys.path.insert(0, _BACKEND_DIR)
-
-# Also add project root to allow relative imports
-if str(_BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(_BASE_DIR))
 
 # =====================================================================
 # 🔍 DEBUG: DIRECTORY & MODEL PATH DIAGNOSTICS

@@ -12,9 +12,9 @@ Verify that get_cake_info() properly handles:
 import sys
 from pathlib import Path
 
-# Add backend to path
+# Add frontend to path for menu_config
 BASE_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(BASE_DIR / "backend"))
+sys.path.insert(0, str(BASE_DIR / "frontend"))
 
 from menu_config import get_cake_info, CAKE_MENU, CAKE_CATEGORIES
 

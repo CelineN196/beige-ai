@@ -33,6 +33,14 @@ from sklearn.metrics import (
 )
 import joblib
 import warnings
+from pathlib import Path
+import sys
+
+# Add frontend directory to path to import menu_config
+_FRONTEND_DIR = str(Path(__file__).resolve().parent.parent.parent / "frontend")
+if _FRONTEND_DIR not in sys.path:
+    sys.path.insert(0, _FRONTEND_DIR)
+
 from menu_config import CAKE_MENU
 
 warnings.filterwarnings('ignore')
