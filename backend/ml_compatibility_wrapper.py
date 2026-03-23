@@ -138,8 +138,9 @@ class SafeMLLoader:
         # ========================================
         # PRIORITY 1: V2 Model (XGBoost) - ACTIVE PRODUCTION
         # ========================================
-        v2_path = model_dir / "model.pkl"
+        v2_path = model_dir / "v2_final_model.pkl"
         print(f"\n[ML_LOADER] PRIORITY 1: V2 Model (Production)")
+        print(f"[ML_LOADER] 🔍 Attempting to load: models/v2_final_model.pkl")
         print(f"[ML_LOADER] V2 path: {v2_path}")
         print(f"[ML_LOADER] V2 exists (Path.exists()): {v2_path.exists()}")
         print(f"[ML_LOADER] V2 exists (os.path.exists()): {os.path.exists(str(v2_path))}")
@@ -148,7 +149,7 @@ class SafeMLLoader:
         if model_dir.exists():
             files = os.listdir(model_dir)
             print(f"[ML_LOADER] Files in models/: {files}")
-            print(f"[ML_LOADER] 'model.pkl' in files: {'model.pkl' in files}")
+            print(f"[ML_LOADER] 'v2_final_model.pkl' in files: {'v2_final_model.pkl' in files}")
         
         # Explicit file existence check using multiple methods
         v2_exists = False
@@ -174,10 +175,11 @@ class SafeMLLoader:
                 print(f"[ML_LOADER] LabelEncoder component type: {type(self.label_encoder).__name__ if self.label_encoder else 'None'}")
                 
                 # Set version EXPLICITLY
-                self.model_version = "V2_XGBOOST"
+                self.model_version = "V2_PRODUCTION"
                 self.load_status = "SUCCESS"
                 self.load_error = None
                 
+                print(f"[ML_LOADER] ✅ Loading V2 model: models/v2_final_model.pkl")
                 print(f"[ML_LOADER] ✅ SUCCESSFULLY SET: model_version = {self.model_version}")
                 print(f"[ML_LOADER] ========================================\n")
                 return self.model, self.preprocessor, self.label_encoder, self.model_version
