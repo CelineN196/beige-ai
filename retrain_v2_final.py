@@ -60,13 +60,21 @@ RANDOM_STATE = 42
 np.random.seed(RANDOM_STATE)
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "backend" / "data"
+DATA_DIR = BASE_DIR / "backend" / "data"  # Dataset is in backend/data
 MODELS_DIR = BASE_DIR / "models"
 
 # Create models directory
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 DATASET_PATH = DATA_DIR / "beige_ai_cake_dataset_v2.csv"
+
+# ✅ EXPLICIT FAILURE CHECK
+if not DATASET_PATH.exists():
+    raise FileNotFoundError(
+        f"❌ CRITICAL: Dataset not found at {DATASET_PATH}\n"
+        f"   Expected: {DATASET_PATH}\n"
+        f"   Please verify the data file exists in the correct location."
+    )
 
 CATEGORICAL_FEATURES = [
     'mood', 'weather_condition', 'time_of_day', 'season', 'temperature_category'
@@ -219,8 +227,8 @@ print(f"  ✓ Sample probabilities: {proba[0][:3]}")
 
 print(f"\n[SAVE] Saving all artifacts...")
 
-# Save unified V2 final model (includes preprocessor inside joblib dump)
-v2_final_model_path = MODELS_DIR / "v2_final_model.pkl"
+# Save unified final model to standardized location
+model_path = MODELS_DIR / "model.pkl"
 joblib.dump({
     'model': model,
     'preprocessor': preprocessor,
@@ -236,20 +244,15 @@ joblib.dump({
         'pandas_version': pd.__version__,
         'joblib_version': joblib.__version__
     }
-}, v2_final_model_path)
+}, model_path)
 
-print(f"  ✓ Unified model: {v2_final_model_path}")
-print(f"    Size: {v2_final_model_path.stat().st_size / 1024 / 1024:.2f} MB")
+print(f"  ✓ Model saved: {model_path}")
+print(f"    Size: {model_path.stat().st_size / 1024 / 1024:.2f} MB")
 
-# Also save individual artifacts for clarity
+# Also save individual artifacts for debugging (optional)
 joblib.dump(model, MODELS_DIR / "v2_xgboost_model.pkl")
-print(f"  ✓ XGBoost model: v2_xgboost_model.pkl")
-
 joblib.dump(preprocessor, MODELS_DIR / "v2_preprocessor.pkl")
-print(f"  ✓ Preprocessor: v2_preprocessor.pkl")
-
 joblib.dump(label_encoder, MODELS_DIR / "v2_label_encoder.pkl")
-print(f"  ✓ Label encoder: v2_label_encoder.pkl")
 
 # Save metadata
 with open(MODELS_DIR / "v2_metadata.json", 'w') as f:
@@ -266,7 +269,6 @@ with open(MODELS_DIR / "v2_metadata.json", 'w') as f:
             'joblib_version': joblib.__version__
         }
     }, f, indent=2)
-print(f"  ✓ Metadata: v2_metadata.json")
 
 # ============================================================================
 # LOAD & VERIFY
@@ -274,24 +276,30 @@ print(f"  ✓ Metadata: v2_metadata.json")
 
 print(f"\n[VERIFY] Loading saved model to verify compatibility...")
 
-loaded = joblib.load(v2_final_model_path)
-loaded_model = loaded['model']
-loaded_preprocessor = loaded['preprocessor']
-loaded_encoder = loaded['label_encoder']
+try:
+    loaded = joblib.load(model_path)
+    loaded_model = loaded['model']
+    loaded_preprocessor = loaded['preprocessor']
+    loaded_encoder = loaded['label_encoder']
 
-# Test with same validation sample
-test_val = X_val_processed[:5]
-predictions = loaded_model.predict(test_val)
-probas = loaded_model.predict_proba(test_val)
+    # Test with same validation sample
+    test_val = X_val_processed[:5]
+    predictions = loaded_model.predict(test_val)
+    probas = loaded_model.predict_proba(test_val)
 
-print(f"  ✓ Model loaded successfully")
-print(f"  ✓ Predictions shape: {predictions.shape}")
-print(f"  ✓ Probabilities shape: {probas.shape}")
-print(f"  ✓ Sample predictions: {predictions[:3]}")
-print(f"  ✓ Training env from disk:")
-print(f"    - sklearn: {loaded['training_env']['sklearn_version']}")
-print(f"    - xgboost: {loaded['training_env']['xgboost_version']}")
-print(f"    - numpy: {loaded['training_env']['numpy_version']}")
+    print(f"  ✓ Model loaded successfully from {model_path}")
+    print(f"  ✓ Predictions shape: {predictions.shape}")
+    print(f"  ✓ Probabilities shape: {probas.shape}")
+    print(f"  ✓ Sample predictions: {predictions[:3]}")
+    print(f"  ✓ Training env from disk:")
+    print(f"    - sklearn: {loaded['training_env']['sklearn_version']}")
+    print(f"    - xgboost: {loaded['training_env']['xgboost_version']}")
+    print(f"    - numpy: {loaded['training_env']['numpy_version']}")
+    print(f"\n✅ MODEL SAVED AND VERIFIED SUCCESSFULLY")
+except Exception as e:
+    print(f"  ❌ CRITICAL: Model load verification failed!")
+    print(f"     Error: {str(e)}")
+    raise
 
 # ============================================================================
 # FINAL SUMMARY
@@ -306,12 +314,8 @@ print(f"  Validation Accuracy: {val_metrics['val_accuracy']:.4f}")
 print(f"  Test Accuracy:       {test_metrics['test_accuracy']:.4f}")
 print(f"  Test F1 (weighted):  {test_metrics['test_f1_weighted']:.4f}")
 
-print(f"\n📦 ARTIFACTS SAVED:")
-print(f"  - {v2_final_model_path}")
-print(f"  - {MODELS_DIR / 'v2_xgboost_model.pkl'}")
-print(f"  - {MODELS_DIR / 'v2_preprocessor.pkl'}")
-print(f"  - {MODELS_DIR / 'v2_label_encoder.pkl'}")
-print(f"  - {MODELS_DIR / 'v2_metadata.json'}")
+print(f"\n📦 PRODUCTION MODEL SAVED TO:")
+print(f"  → {model_path}")
 
 print(f"\n🔒 ENVIRONMENT LOCKED IN:")
 print(f"  scikit-learn: {sklearn.__version__}")

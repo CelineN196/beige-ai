@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore')
 # Relative paths from package root
 MODEL_DIR = Path(__file__).resolve().parent.parent / "models"
 
-V2_PRIMARY_MODEL = MODEL_DIR / "v2_final_model.pkl"
+V2_PRIMARY_MODEL = MODEL_DIR / "model.pkl"
 V1_FALLBACK_MODEL = MODEL_DIR / "cake_model.joblib"
 V1_FALLBACK_PREPROCESSOR = MODEL_DIR / "preprocessor.joblib"
 

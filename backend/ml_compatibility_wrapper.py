@@ -128,8 +128,8 @@ class SafeMLLoader:
         """
         model_dir = Path(__file__).resolve().parent.parent / "models"
         
-        # Try V2 Model (Primary)
-        v2_path = model_dir / "v2_final_model.pkl"
+        # Try V2 Model (Primary) - Standardized location
+        v2_path = model_dir / "model.pkl"
         if v2_path.exists():
             try:
                 container = joblib.load(v2_path)
