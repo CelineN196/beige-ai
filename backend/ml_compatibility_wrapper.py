@@ -116,168 +116,154 @@ class SafeMLLoader:
     
     def load(self) -> Tuple[Optional[Any], Optional[Any], Optional[Any], str]:
         """
-        Load ML model with fallback strategy.
+        Load ML model with V2-FIRST, FORCE-RETRAIN strategy.
         
-        Try order:
-        1. V2 (XGBoost unified container)
-        2. V1 (RandomForest + preprocessor)
-        3. Rule-based predictor (no ML)
+        🔥 CRITICAL: V2 ONLY - No silent fallbacks
+        
+        Strategy:
+        1. Try to load V2 from disk
+        2. If V2 fails → FORCE retrain, never fall back to V1
+        3. Only use V1 if retraining also fails (last resort)
         
         Returns:
             (model, preprocessor, label_encoder, version)
         """
         import os
         
+        print(f"\n{'='*60}")
+        print(f"🔥 V2 MODEL LOADER - FORCED V2 MODE 🔥")
+        print(f"{'='*60}")
+        
         model_dir = Path(__file__).resolve().parent.parent / "models"
-        print(f"\n[ML_LOADER] ========================================")
-        print(f"[ML_LOADER] STARTING MODEL LOAD SEQUENCE")
-        print(f"[ML_LOADER] Base directory: {Path(__file__).resolve().parent.parent}")
-        print(f"[ML_LOADER] Models directory: {model_dir}")
-        print(f"[ML_LOADER] Models dir exists: {model_dir.exists()}")
-        
-        # ========================================
-        # PRIORITY 1: V2 Model (XGBoost) - ACTIVE PRODUCTION
-        # ========================================
         v2_path = model_dir / "v2_final_model.pkl"
-        print(f"\n[ML_LOADER] PRIORITY 1: V2 Model (Production)")
-        print(f"[ML_LOADER] 🔍 Attempting to load: models/v2_final_model.pkl")
-        print(f"[ML_LOADER] V2 path: {v2_path}")
-        print(f"[ML_LOADER] V2 exists (Path.exists()): {v2_path.exists()}")
-        print(f"[ML_LOADER] V2 exists (os.path.exists()): {os.path.exists(str(v2_path))}")
         
-        # Double-check file listing
-        if model_dir.exists():
-            files = os.listdir(model_dir)
-            print(f"[ML_LOADER] Files in models/: {files}")
-            print(f"[ML_LOADER] 'v2_final_model.pkl' in files: {'v2_final_model.pkl' in files}")
+        print(f"[ML_LOADER] V2 Model Path: {v2_path}")
+        print(f"[ML_LOADER] V2 Model Exists: {v2_path.exists()}")
         
-        # Explicit file existence check using multiple methods
-        v2_exists = False
-        if v2_path.exists():
-            v2_exists = True
-            print(f"[ML_LOADER] ✅ V2 path.exists() = True")
+        # ========================================
+        # STEP 1: ATTEMPT V2 LOAD
+        # ========================================
+        print(f"\n[ML_LOADER] STEP 1: Attempting V2 load...")
+        v2_load_successful = False
         
-        if v2_exists and os.path.getsize(str(v2_path)) > 0:
+        if v2_path.exists() and os.path.getsize(str(v2_path)) > 0:
             try:
-                print(f"[ML_LOADER] Attempting to load V2 model...")
+                print(f"[ML_LOADER] ✅ V2 file exists ({os.path.getsize(str(v2_path))} bytes)")
+                print(f"[ML_LOADER] 🔍 Loading V2 model...")
+                
                 container = joblib.load(str(v2_path))
-                print(f"[ML_LOADER] ✅ V2 model loaded successfully with joblib")
-                print(f"[ML_LOADER] Container type: {type(container)}")
-                print(f"[ML_LOADER] Container keys: {list(container.keys())}")
+                
+                # Validate structure
+                if isinstance(container, dict):
+                    self.model = container.get('model')
+                    self.preprocessor = container.get('preprocessor')
+                    self.label_encoder = container.get('label_encoder')
+                else:
+                    # Old format: just the model
+                    self.model = container
+                    self.preprocessor = None
+                    self.label_encoder = None
+                
+                # Verify model is usable
+                if self.model is not None:
+                    print(f"[ML_LOADER] ✅ V2 model loaded successfully")
+                    print(f"[ML_LOADER] Model type: {type(self.model).__name__}")
+                    v2_load_successful = True
+                else:
+                    print(f"[ML_LOADER] ❌ V2 file corrupted: model component missing")
+                    
+            except Exception as e:
+                print(f"[ML_LOADER] ❌ V2 load failed: {type(e).__name__}: {e}")
+        else:
+            print(f"[ML_LOADER] ⚠️  V2 file not found or empty")
+        
+        # ========================================
+        # STEP 2: IF V2 FAILED → FORCE RETRAIN
+        # ========================================
+        if not v2_load_successful:
+            print(f"\n[ML_LOADER] STEP 2: V2 load failed, FORCING RETRAIN...")
+            print(f"[ML_LOADER] 🔄 MANDATORY RETRAINING INITIATED")
+            
+            try:
+                print(f"[ML_LOADER] Importing train_model()...")
+                from retrain_v2_final import train_model
+                
+                print(f"[ML_LOADER] Starting retraining (verbose=False)...")
+                model_dict = train_model(verbose=False)
                 
                 # Extract components
-                self.model = container.get('model')
-                self.preprocessor = container.get('preprocessor')
-                self.label_encoder = container.get('label_encoder')
+                self.model = model_dict.get('model')
+                self.preprocessor = model_dict.get('preprocessor')
+                self.label_encoder = model_dict.get('label_encoder')
                 
-                print(f"[ML_LOADER] Model component type: {type(self.model).__name__ if self.model else 'None'}")
-                print(f"[ML_LOADER] Preprocessor component type: {type(self.preprocessor).__name__ if self.preprocessor else 'None'}")
-                print(f"[ML_LOADER] LabelEncoder component type: {type(self.label_encoder).__name__ if self.label_encoder else 'None'}")
+                print(f"[ML_LOADER] ✅ Model retrained successfully")
+                print(f"[ML_LOADER] Saving retrained model to {v2_path}...")
+                joblib.dump(model_dict, str(v2_path))
+                print(f"[ML_LOADER] ✅ Retrained model persisted to disk")
                 
-                # Set version EXPLICITLY
-                self.model_version = "V2_PRODUCTION"
-                self.load_status = "SUCCESS"
+                self.model_version = "V2_RETRAINED"
+                self.load_status = "RETRAINED"
                 self.load_error = None
                 
-                print(f"[ML_LOADER] ✅ Loading V2 model: models/v2_final_model.pkl")
-                print(f"[ML_LOADER] ✅ SUCCESSFULLY SET: model_version = {self.model_version}")
-                print(f"[ML_LOADER] ========================================\n")
+                print(f"\n{'='*60}")
+                print(f"✅ V2_RETRAINED MODEL READY")
+                print(f"{'='*60}\n")
                 return self.model, self.preprocessor, self.label_encoder, self.model_version
                 
-            except Exception as e:
-                print(f"[ML_LOADER] ❌ V2 load FAILED with exception: {e}")
-                import traceback
-                traceback.print_exc()
-                self.load_error = f"V2 load failed: {str(e)}"
-                
-                # ========================================
-                # SELF-HEALING: ATTEMPT AUTOMATIC RETRAINING
-                # ========================================
-                print(f"\n[ML_LOADER] 🔧 SELF-HEALING ACTIVATION")
-                print(f"[ML_LOADER] Attempting automatic model retraining...")
-                
-                try:
-                    # Import the training function
-                    from retrain_v2_final import train_model
-                    print(f"[ML_LOADER] ✅ Successfully imported train_model()")
-                    
-                    # Retrain the model silently (verbose=False for deployment)
-                    print(f"[ML_LOADER] Starting model retraining...")
-                    model_dict = train_model(verbose=False)
-                    
-                    print(f"[ML_LOADER] ✅ Model retrained successfully")
-                    print(f"[ML_LOADER] Saving retrained model to {v2_path}...")
-                    
-                    # Save the retrained model
-                    joblib.dump(model_dict, str(v2_path))
-                    print(f"[ML_LOADER] ✅ Retrained model saved to {v2_path}")
-                    
-                    # Extract components
-                    self.model = model_dict.get('model')
-                    self.preprocessor = model_dict.get('preprocessor')
-                    self.label_encoder = model_dict.get('label_encoder')
-                    
-                    # Set version to indicate retraining occurred
-                    self.model_version = "V2_RETRAINED"
-                    self.load_status = "RETRAINED"
-                    self.load_error = None
-                    
-                    print(f"[ML_LOADER] ✅ SELF-HEALING SUCCESSFUL")
-                    print(f"[ML_LOADER] Model version set to: {self.model_version}")
-                    print(f"[ML_LOADER] ========================================\n")
-                    return self.model, self.preprocessor, self.label_encoder, self.model_version
-                    
-                except Exception as retrain_error:
-                    print(f"[ML_LOADER] ❌ SELF-HEALING FAILED: {retrain_error}")
-                    import traceback
-                    traceback.print_exc()
-                    self.load_error = f"V2 load failed AND retrain failed: {str(retrain_error)}"
-                    print(f"[ML_LOADER] ⚠️  Falling back to V1 or rule-based predictor")
-                    # Continue to V1 fallback below
-        else:
-            print(f"[ML_LOADER] V2 model file not found or empty at {v2_path}")
-            print(f"[ML_LOADER] File size: {os.path.getsize(str(v2_path)) if os.path.exists(str(v2_path)) else 'N/A'}")
+            except Exception as retrain_error:
+                print(f"[ML_LOADER] ❌ RETRAIN FAILED: {type(retrain_error).__name__}: {retrain_error}")
+                print(f"[ML_LOADER] Last resort: attempting V1 fallback...")
+                self.load_error = f"Retrain failed: {str(retrain_error)}"
+                # Fall through to V1 below
         
         # ========================================
-        # PRIORITY 2: V1 Model (RandomForest) - Legacy fallback
+        # STEP 3: V2 SUCCEEDED → RETURN V2_PRODUCTION
         # ========================================
-        print(f"\n[ML_LOADER] PRIORITY 2: V1 Model (Legacy Fallback)")
+        if v2_load_successful:
+            self.model_version = "V2_PRODUCTION"
+            self.load_status = "SUCCESS"
+            self.load_error = None
+            
+            print(f"{'='*60}")
+            print(f"✅ V2_PRODUCTION MODEL READY")
+            print(f"{'='*60}\n")
+            return self.model, self.preprocessor, self.label_encoder, self.model_version
+        
+        # ========================================
+        # STEP 4: V1 FALLBACK (LAST RESORT ONLY)
+        # ========================================
+        print(f"\n[ML_LOADER] STEP 4: V1 last-resort fallback...")
         v1_path = model_dir / "cake_model.joblib"
         v1_preprocessor_path = model_dir / "preprocessor.joblib"
         
-        print(f"[ML_LOADER] V1 model path: {v1_path}")
-        print(f"[ML_LOADER] V1 model exists: {v1_path.exists()}")
-        print(f"[ML_LOADER] V1 preprocessor path: {v1_preprocessor_path}")
-        print(f"[ML_LOADER] V1 preprocessor exists: {v1_preprocessor_path.exists()}")
-        
         if v1_path.exists() and v1_preprocessor_path.exists():
             try:
-                print(f"[ML_LOADER] Attempting to load V1 model...")
+                print(f"[ML_LOADER] Attempting V1 load...")
                 self.model = joblib.load(str(v1_path))
                 self.preprocessor = joblib.load(str(v1_preprocessor_path))
                 self.model_version = "V1_FALLBACK"
                 self.load_status = "FALLBACK"
-                self.load_error = None
-                print(f"[ML_LOADER] ✅ V1 model loaded successfully")
-                print(f"[ML_LOADER] ========================================\n")
+                
+                print(f"[ML_LOADER] ⚠️  V1_FALLBACK loaded (V2 unavailable)")
+                print(f"\n{'='*60}")
+                print(f"⚠️  USING V1 FALLBACK (V2 FAILED)")
+                print(f"{'='*60}\n")
                 return self.model, self.preprocessor, None, self.model_version
             except Exception as e:
-                print(f"[ML_LOADER] ❌ V1 load failed: {e}")
-                import traceback
-                traceback.print_exc()
-                self.load_error = f"V1 load failed: {str(e)}"
-        else:
-            print(f"[ML_LOADER] V1 model files not found")
+                print(f"[ML_LOADER] ❌ V1 load also failed: {e}")
         
         # ========================================
-        # PRIORITY 3: Rule-based predictor (No ML)
+        # STEP 5: RULE-BASED LAST RESORT
         # ========================================
-        print(f"\n[ML_LOADER] PRIORITY 3: Rule-Based Predictor (No ML)")
-        print(f"[ML_LOADER] No production models available. Using rule-based fallback.")
+        print(f"\n[ML_LOADER] STEP 5: All ML models failed, using rule-based...")
         self.model_version = "RULE_BASED"
         self.load_status = "RULE_BASED"
-        self.load_error = "Both V2 and V1 models unavailable - using rule-based fallback"
-        print(f"[ML_LOADER] ========================================\n")
+        self.load_error = "All ML models unavailable - using rule-based fallback"
+        
+        print(f"[ML_LOADER] ❌ No ML models available")
+        print(f"\n{'='*60}")
+        print(f"❌ RULE-BASED FALLBACK ONLY")
+        print(f"{'='*60}\n")
         return None, None, None, self.model_version
     
     def get_status_dict(self) -> Dict[str, Any]:
