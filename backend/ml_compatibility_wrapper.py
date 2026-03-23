@@ -126,62 +126,119 @@ class SafeMLLoader:
         Returns:
             (model, preprocessor, label_encoder, version)
         """
+        import os
+        
         model_dir = Path(__file__).resolve().parent.parent / "models"
+        print(f"\n[ML_LOADER] ========================================")
+        print(f"[ML_LOADER] STARTING MODEL LOAD SEQUENCE")
+        print(f"[ML_LOADER] Base directory: {Path(__file__).resolve().parent.parent}")
+        print(f"[ML_LOADER] Models directory: {model_dir}")
+        print(f"[ML_LOADER] Models dir exists: {model_dir.exists()}")
         
-        # Try V2 Model (Primary) - Standardized location
+        # ========================================
+        # PRIORITY 1: V2 Model (XGBoost) - ACTIVE PRODUCTION
+        # ========================================
         v2_path = model_dir / "model.pkl"
-        print(f"[ML_LOADER] Checking V2 model at: {v2_path}")
-        print(f"[ML_LOADER] V2 model exists: {v2_path.exists()}")
+        print(f"\n[ML_LOADER] PRIORITY 1: V2 Model (Production)")
+        print(f"[ML_LOADER] V2 path: {v2_path}")
+        print(f"[ML_LOADER] V2 exists (Path.exists()): {v2_path.exists()}")
+        print(f"[ML_LOADER] V2 exists (os.path.exists()): {os.path.exists(str(v2_path))}")
         
+        # Double-check file listing
+        if model_dir.exists():
+            files = os.listdir(model_dir)
+            print(f"[ML_LOADER] Files in models/: {files}")
+            print(f"[ML_LOADER] 'model.pkl' in files: {'model.pkl' in files}")
+        
+        # Explicit file existence check using multiple methods
+        v2_exists = False
         if v2_path.exists():
+            v2_exists = True
+            print(f"[ML_LOADER] ✅ V2 path.exists() = True")
+        
+        if v2_exists and os.path.getsize(str(v2_path)) > 0:
             try:
-                print(f"[ML_LOADER] Attempting to load V2 model from: {v2_path}")
-                container = joblib.load(v2_path)
-                print(f"[ML_LOADER] ✅ V2 model loaded successfully")
+                print(f"[ML_LOADER] Attempting to load V2 model...")
+                container = joblib.load(str(v2_path))
+                print(f"[ML_LOADER] ✅ V2 model loaded successfully with joblib")
+                print(f"[ML_LOADER] Container type: {type(container)}")
                 print(f"[ML_LOADER] Container keys: {list(container.keys())}")
+                
+                # Extract components
                 self.model = container.get('model')
                 self.preprocessor = container.get('preprocessor')
                 self.label_encoder = container.get('label_encoder')
+                
+                print(f"[ML_LOADER] Model component type: {type(self.model).__name__ if self.model else 'None'}")
+                print(f"[ML_LOADER] Preprocessor component type: {type(self.preprocessor).__name__ if self.preprocessor else 'None'}")
+                print(f"[ML_LOADER] LabelEncoder component type: {type(self.label_encoder).__name__ if self.label_encoder else 'None'}")
+                
+                # Set version EXPLICITLY
                 self.model_version = "V2_XGBOOST"
                 self.load_status = "SUCCESS"
-                print(f"[ML_LOADER] Model type: {type(self.model).__name__}")
+                self.load_error = None
+                
+                print(f"[ML_LOADER] ✅ SUCCESSFULLY SET: model_version = {self.model_version}")
+                print(f"[ML_LOADER] ========================================\n")
                 return self.model, self.preprocessor, self.label_encoder, self.model_version
+                
             except Exception as e:
-                print(f"[ML_LOADER] ❌ V2 load failed: {e}")
+                print(f"[ML_LOADER] ❌ V2 load FAILED with exception: {e}")
                 import traceback
                 traceback.print_exc()
                 self.load_error = f"V2 load failed: {str(e)}"
+                # IMPORTANT: Do NOT continue to V1 if V2 file exists but failed
+                # This is a critical error that should be exposed
+                print(f"[ML_LOADER] ⚠️  V2 model exists but failed to load. NOT falling back to V1.")
+                print(f"[ML_LOADER] This indicates a critical incompatibility issue.")
+                self.model_version = "ERROR_V2_LOAD_FAILED"
+                self.load_status = "ERROR"
+                print(f"[ML_LOADER] ========================================\n")
+                return None, None, None, self.model_version
         else:
-            print(f"[ML_LOADER] V2 model file does not exist")
+            print(f"[ML_LOADER] V2 model file not found or empty at {v2_path}")
+            print(f"[ML_LOADER] File size: {os.path.getsize(str(v2_path)) if os.path.exists(str(v2_path)) else 'N/A'}")
         
-        # Try V1 Model (Fallback)
+        # ========================================
+        # PRIORITY 2: V1 Model (RandomForest) - Legacy fallback
+        # ========================================
+        print(f"\n[ML_LOADER] PRIORITY 2: V1 Model (Legacy Fallback)")
         v1_path = model_dir / "cake_model.joblib"
         v1_preprocessor_path = model_dir / "preprocessor.joblib"
         
-        print(f"[ML_LOADER] Checking V1 model at: {v1_path}")
+        print(f"[ML_LOADER] V1 model path: {v1_path}")
         print(f"[ML_LOADER] V1 model exists: {v1_path.exists()}")
+        print(f"[ML_LOADER] V1 preprocessor path: {v1_preprocessor_path}")
         print(f"[ML_LOADER] V1 preprocessor exists: {v1_preprocessor_path.exists()}")
         
         if v1_path.exists() and v1_preprocessor_path.exists():
             try:
-                print(f"[ML_LOADER] Attempting to load V1 model")
-                self.model = joblib.load(v1_path)
-                self.preprocessor = joblib.load(v1_preprocessor_path)
+                print(f"[ML_LOADER] Attempting to load V1 model...")
+                self.model = joblib.load(str(v1_path))
+                self.preprocessor = joblib.load(str(v1_preprocessor_path))
                 self.model_version = "V1_FALLBACK"
                 self.load_status = "FALLBACK"
+                self.load_error = None
                 print(f"[ML_LOADER] ✅ V1 model loaded successfully")
+                print(f"[ML_LOADER] ========================================\n")
                 return self.model, self.preprocessor, None, self.model_version
             except Exception as e:
                 print(f"[ML_LOADER] ❌ V1 load failed: {e}")
                 import traceback
                 traceback.print_exc()
                 self.load_error = f"V1 load failed: {str(e)}"
+        else:
+            print(f"[ML_LOADER] V1 model files not found")
         
-        # Fallback to rule-based predictor
-        print(f"[ML_LOADER] ⚠️ No ML models available, using rule-based mode")
+        # ========================================
+        # PRIORITY 3: Rule-based predictor (No ML)
+        # ========================================
+        print(f"\n[ML_LOADER] PRIORITY 3: Rule-Based Predictor (No ML)")
+        print(f"[ML_LOADER] No production models available. Using rule-based fallback.")
         self.model_version = "RULE_BASED"
         self.load_status = "RULE_BASED"
-        self.load_error = "Both V2 and V1 models unavailable"
+        self.load_error = "Both V2 and V1 models unavailable - using rule-based fallback"
+        print(f"[ML_LOADER] ========================================\n")
         return None, None, None, self.model_version
     
     def get_status_dict(self) -> Dict[str, Any]:
