@@ -920,6 +920,14 @@ def display_ai_recommendations():
             <div class='rec-cards-container'>
     """, unsafe_allow_html=True)
     
+    # 🔍 Debug: Show recommendation source
+    prediction_source = result.get('prediction_source', 'UNKNOWN')
+    if "ML" in prediction_source:
+        st.info(f"🧠 **Source:** {prediction_source} — These recommendations are AI-generated using machine learning.")
+    elif "Rule-Based" in prediction_source:
+        st.warning(f"⚠️ **Source:** {prediction_source} — These recommendations use rule-based logic.")
+    """, unsafe_allow_html=True)
+    
     rec_cols = st.columns(3)
     roman_numerals = ['I', 'II', 'III']
     
@@ -1420,16 +1428,17 @@ else:  # Store page
             })
             
             # ================================================================
-            # SAFE PREDICTION WITH AUTOMATIC FALLBACK
-            # Tries ML model, falls back to rule-based if model unavailable
+            # V2-FIRST PREDICTION WITH ML/RULE-BASED FALLBACK
+            # Priority: V2 ML → Rule-based (never silent fallbacks)
             # ================================================================
             
             probabilities = None
             prediction_success = False
-            prediction_mode = "UNKNOWN"
+            prediction_source = "UNKNOWN"
             
-            # Try ML-based prediction first
-            if model is not None and preprocessor is not None:
+            # 🔥 STEP 1: TRY ML PREDICTIONS (V2 PREFERRED)
+            if (model is not None and preprocessor is not None and 
+                MODEL_VERSION in ["V2_PRODUCTION", "V2_RETRAINED"]):
                 try:
                     # Preprocess input
                     X_processed = preprocessor.transform(user_input)
@@ -1442,16 +1451,22 @@ else:  # Store page
                             f"expected {expected_features}"
                         )
                     
-                    # Make prediction
+                    # Make ML prediction
                     probabilities = model.predict_proba(X_processed)[0]
                     prediction_success = True
-                    prediction_mode = MODEL_VERSION
+                    prediction_source = f"🧠 ML ({MODEL_VERSION})"
+                    
+                    # Debug output
+                    print(f"[UI] 🧠 Using ML predictions from {MODEL_VERSION}")
+                    print(f"[UI] Probabilities shape: {probabilities.shape}")
+                    print(f"[UI] Top 3 probs: {np.sort(probabilities)[-3:][::-1]}")
                     
                 except Exception as e:
-                    # ML prediction failed - will fall back to rule-based
-                    prediction_mode = "FALLBACK"
+                    # ML prediction failed - will try rule-based
+                    print(f"[UI] ❌ ML prediction failed: {str(e)[:100]}")
+                    prediction_source = "RULE_BASED"
             
-            # If ML prediction failed or model unavailable, use rule-based predictor
+            # STEP 2: FALLBACK TO RULE-BASED IF ML UNAVAILABLE OR FAILED
             if not prediction_success:
                 try:
                     probabilities = RuleBasedPredictor.predict_proba(
@@ -1459,7 +1474,12 @@ else:  # Store page
                         weather=st.session_state.weather_condition
                     )
                     prediction_success = True
-                    prediction_mode = "RULE_BASED"
+                    prediction_source = "⚠️ Rule-Based"
+                    
+                    # Debug output
+                    print(f"[UI] Using rule-based recommendations")
+                    print(f"[UI] Rule-based probabilities shape: {probabilities.shape}")
+                    
                 except Exception as e:
                     st.error(f"❌ Prediction failed: {str(e)}")
                     st.stop()
@@ -1476,8 +1496,8 @@ else:  # Store page
                 'probabilities': probabilities,
                 'mood': mood,
                 'weather_condition': st.session_state.weather_condition,
-                'model_version': MODE,
-                'prediction_mode': prediction_mode
+                'model_version': MODEL_VERSION,
+                'prediction_source': prediction_source
             }
             st.session_state.has_generated = True
             
@@ -1489,13 +1509,13 @@ else:  # Store page
                 cake=top_3_cakes[0]  # Use top recommendation
             )
             
-            # Show success message with prediction mode
-            if prediction_mode == "RULE_BASED":
-                st.info(f"✨ Rule-based recommendations (ML model not available)")
-            elif prediction_mode == "FALLBACK":
-                st.info(f"✨ V1 model: Your personalized recommendations are ready.")
+            # Show success message with prediction source
+            if "ML" in prediction_source:
+                st.success(f"✨ {prediction_source}: Your personalized ML-powered recommendations are ready.")
+            elif "Rule-Based" in prediction_source:
+                st.info(f"✨ {prediction_source}: Your personalized recommendations are ready (rule-based).")
             else:
-                st.success(f"✨ {MODEL_VERSION}: Your personalized recommendations are ready.")
+                st.success(f"✨ Recommendations generated: {prediction_source}")
 
 
     # ============================================================================
