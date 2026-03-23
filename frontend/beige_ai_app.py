@@ -926,7 +926,6 @@ def display_ai_recommendations():
         st.info(f"🧠 **Source:** {prediction_source} — These recommendations are AI-generated using machine learning.")
     elif "Rule-Based" in prediction_source:
         st.warning(f"⚠️ **Source:** {prediction_source} — These recommendations use rule-based logic.")
-    """, unsafe_allow_html=True)
     
     rec_cols = st.columns(3)
     roman_numerals = ['I', 'II', 'III']
@@ -945,14 +944,39 @@ def display_ai_recommendations():
             # Build confidence score section (analyst only)
             confidence_section = ""
             if st.session_state.analyst_mode:
-                confidence_section = f"<div class='rec-confidence'>{prob*100:.1f}% match</div>"
+                confidence_section = "<div class='rec-confidence'>{prob:.1f}% match</div>".format(prob=prob*100)
             
             # Build technical details section (analyst only)
             technical_details = ""
             if st.session_state.analyst_mode:
-                technical_details = f"<div class='rec-detail'><strong>Sweetness:</strong> {sweetness}/10</div><div class='rec-detail'><strong>Wellness:</strong> {health}/10</div>"
+                technical_details = "<div class='rec-detail'><strong>Sweetness:</strong> {sweetness}/10</div><div class='rec-detail'><strong>Wellness:</strong> {health}/10</div>".format(
+                    sweetness=sweetness,
+                    health=health
+                )
             
-            card_html = f"""<div class='rec-card'><div class='rec-rank'>{roman_numerals[idx]}</div><div class='rec-name'>{cake}</div>{confidence_section}<div class='rec-description'>Recommended for this moment based on your environment and mood.</div><div class='rec-detail'><strong>Category:</strong> {category}</div><div class='rec-detail'><strong>Flavor:</strong> {flavor}</div>{technical_details}</div>"""
+            # Ensure all variables default to empty string if None
+            confidence_section = confidence_section or ""
+            technical_details = technical_details or ""
+            
+            # Build recommendation card HTML using .format() for safety
+            card_html = (
+                "<div class='rec-card'>"
+                "<div class='rec-rank'>{rank}</div>"
+                "<div class='rec-name'>{cake}</div>"
+                "{confidence}"
+                "<div class='rec-description'>Recommended for this moment based on your environment and mood.</div>"
+                "<div class='rec-detail'><strong>Category:</strong> {category}</div>"
+                "<div class='rec-detail'><strong>Flavor:</strong> {flavor}</div>"
+                "{technical}"
+                "</div>"
+            ).format(
+                rank=roman_numerals[idx],
+                cake=cake,
+                confidence=confidence_section,
+                category=category,
+                flavor=flavor,
+                technical=technical_details
+            )
             st.markdown(card_html, unsafe_allow_html=True)
             
             if st.button("Add to Basket", key=f"ai_{idx}_{cake}", width="stretch"):
@@ -963,8 +987,8 @@ def display_ai_recommendations():
                 st.success(f"✓ {cake} added to basket!")
     
     st.markdown("""
-            </div>
         </div>
+    </div>
     """, unsafe_allow_html=True)
     
     st.markdown("<br><br>", unsafe_allow_html=True)
