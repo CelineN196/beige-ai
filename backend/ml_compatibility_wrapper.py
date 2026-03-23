@@ -186,7 +186,21 @@ class SafeMLLoader:
             
             try:
                 print(f"[ML_LOADER] Importing train_model()...")
-                from retrain_v2_final import train_model
+                
+                # Fix import path: retrain_v2_final.py is in project root, not in backend/
+                import sys
+                import importlib
+                project_root = Path(__file__).resolve().parent.parent
+                print(f"[ML_LOADER] 📁 Project root: {project_root}")
+                
+                if str(project_root) not in sys.path:
+                    sys.path.insert(0, str(project_root))
+                    print(f"[ML_LOADER] ✅ Added project root to sys.path")
+                
+                # Import train_model function from retrain_v2_final
+                retrain_module = importlib.import_module('retrain_v2_final')
+                train_model = retrain_module.train_model
+                print(f"[ML_LOADER] 📦 Retrain module loaded successfully")
                 
                 print(f"[ML_LOADER] Starting retraining (verbose=False)...")
                 model_dict = train_model(verbose=False)
