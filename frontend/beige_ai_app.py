@@ -31,6 +31,54 @@ import csv
 _BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BASE_DIR / "backend"))
 
+# =====================================================================
+# 🔍 DEBUG: DIRECTORY & MODEL PATH DIAGNOSTICS
+# =====================================================================
+_DEBUG_ENABLED = True  # Set to False to hide debug output
+
+if _DEBUG_ENABLED:
+    st.write("🔍 **DEBUG: Environment & Model Loading Diagnostics**")
+    
+    # Show base directory
+    st.write(f"📁 Base directory: `{_BASE_DIR}`")
+    
+    # List root directory files
+    try:
+        root_files = os.listdir(_BASE_DIR)
+        st.write(f"📂 Root files count: {len(root_files)}")
+        st.write(f"   Files: {', '.join(sorted(root_files)[:10])}...")
+    except Exception as e:
+        st.error(f"❌ Cannot list root files: {e}")
+    
+    # Check models directory
+    models_dir = _BASE_DIR / "models"
+    st.write(f"📌 Expected models path: `{models_dir}`")
+    st.write(f"   Exists: {'✅ YES' if models_dir.exists() else '❌ NO'}")
+    
+    if models_dir.exists():
+        try:
+            model_files = os.listdir(models_dir)
+            st.write(f"   📦 Contents ({len(model_files)} files): {', '.join(sorted(model_files))}")
+        except Exception as e:
+            st.error(f"   ❌ Cannot list models: {e}")
+    else:
+        st.error("   ❌ Models directory does NOT exist!")
+    
+    # Check specific model.pkl
+    model_pkl_path = models_dir / "model.pkl"
+    st.write(f"🎯 Target model: `models/model.pkl`")
+    st.write(f"   Full path: `{model_pkl_path}`")
+    st.write(f"   Exists: {'✅ YES' if model_pkl_path.exists() else '❌ NO'}")
+    
+    if model_pkl_path.exists():
+        try:
+            file_size_mb = model_pkl_path.stat().st_size / (1024 * 1024)
+            st.write(f"   Size: {file_size_mb:.2f} MB")
+        except Exception as e:
+            st.error(f"   ❌ Cannot get file size: {e}")
+    
+    st.write("---")
+
 from menu_config import CAKE_MENU, CAKE_CATEGORIES
 
 # Create full menu structure with prices
@@ -242,9 +290,36 @@ def load_ml_system():
     Returns:
         (model, preprocessor, label_encoder, model_version, ml_status)
     """
-    loader = get_safe_ml_loader()
-    model, preprocessor, label_encoder, version = loader.load()
+    if _DEBUG_ENABLED:
+        st.write("⏳ **Loading ML System...**")
+    
+    try:
+        loader = get_safe_ml_loader()
+        if _DEBUG_ENABLED:
+            st.write("✅ SafeMLLoader created successfully")
+    except Exception as e:
+        if _DEBUG_ENABLED:
+            st.error(f"❌ Failed to create SafeMLLoader: {e}")
+        raise
+    
+    try:
+        model, preprocessor, label_encoder, version = loader.load()
+        if _DEBUG_ENABLED:
+            st.write(f"✅ Model loading returned: version={version}")
+    except Exception as e:
+        if _DEBUG_ENABLED:
+            st.error(f"❌ Model load() failed: {e}")
+        raise
+    
     status = loader.get_status_dict()
+    
+    if _DEBUG_ENABLED:
+        st.write(f"📊 Final status:")
+        st.write(f"   - Load Status: {status.get('load_status', 'UNKNOWN')}")
+        st.write(f"   - Model Version: {status.get('model_version', 'UNKNOWN')}")
+        st.write(f"   - Load Error: {status.get('load_error', 'None')}")
+        st.write("---")
+    
     return model, preprocessor, label_encoder, version, status
 
 @st.cache_resource
