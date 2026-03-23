@@ -213,7 +213,7 @@ def render_dashboard():
         
         st.dataframe(
             display_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 'Purchases': st.column_config.ProgressColumn(

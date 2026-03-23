@@ -167,7 +167,7 @@ if not inventory_df.empty:
     # Show table
     st.dataframe(
         display_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
     
@@ -225,7 +225,7 @@ if not top_cakes.empty:
         revenue_df.columns = ['Cake', 'Revenue']
         revenue_df['Revenue'] = revenue_df['Revenue'].apply(lambda x: f"${x:.2f}")
         
-        st.dataframe(revenue_df, use_container_width=True, hide_index=True)
+        st.dataframe(revenue_df, width="stretch", hide_index=True)
 
 st.markdown("---")
 
@@ -343,7 +343,7 @@ if not recent_sales.empty:
     
     st.dataframe(
         display_sales[['Time', 'Recommended', 'Purchased', 'Match', 'Mood', 'Price']],
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 else:

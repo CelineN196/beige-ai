@@ -50,12 +50,12 @@ def display_safe_image(local_path, fallback_url, caption=""):
     """
     try:
         if local_path and os.path.exists(local_path):
-            st.image(local_path, caption=caption, use_container_width=True)
+            st.image(local_path, caption=caption, width="stretch")
         else:
-            st.image(fallback_url, caption=caption, use_container_width=True)
+            st.image(fallback_url, caption=caption, width="stretch")
     except Exception:
         # Final fallback to URL
-        st.image(fallback_url, caption=caption, use_container_width=True)
+        st.image(fallback_url, caption=caption, width="stretch")
 
 # ============================================================================
 # SESSION STATE INITIALIZATION
@@ -158,7 +158,7 @@ with header_col1:
 
 with header_col2:
     basket_count = len(st.session_state.cart)
-    if st.button(f"🛒 Basket ({basket_count})", key='header_basket', use_container_width=True):
+    if st.button(f"🛒 Basket ({basket_count})", key='header_basket', width="stretch"):
         st.session_state.page = 'checkout'
         st.rerun()
 
@@ -795,7 +795,7 @@ def display_full_menu():
             """
             st.markdown(menu_item_html, unsafe_allow_html=True)
             
-            if st.button("Add to Basket", key=f"menu_{idx}_{cake_name}", use_container_width=True):
+            if st.button("Add to Basket", key=f"menu_{idx}_{cake_name}", width="stretch"):
                 st.session_state.cart.append({
                     'name': cake_name,
                     'price': cake_price
@@ -872,7 +872,7 @@ def display_ai_recommendations():
             card_html = f"""<div class='rec-card'><div class='rec-rank'>{roman_numerals[idx]}</div><div class='rec-name'>{cake}</div>{confidence_section}<div class='rec-description'>Recommended for this moment based on your environment and mood.</div><div class='rec-detail'><strong>Category:</strong> {category}</div><div class='rec-detail'><strong>Flavor:</strong> {flavor}</div>{technical_details}</div>"""
             st.markdown(card_html, unsafe_allow_html=True)
             
-            if st.button("Add to Basket", key=f"ai_{idx}_{cake}", use_container_width=True):
+            if st.button("Add to Basket", key=f"ai_{idx}_{cake}", width="stretch"):
                 st.session_state.cart.append({
                     'name': cake,
                     'price': cake_price
@@ -976,7 +976,7 @@ def display_checkout():
     
     if len(st.session_state.cart) == 0:
         st.info("Your basket is empty. Return to the store to add cakes!")
-        if st.button("Back to Store", use_container_width=True):
+        if st.button("Back to Store", width="stretch"):
             st.session_state.page = 'store'
             st.session_state.order_logged = False
             st.rerun()
@@ -1009,13 +1009,13 @@ def display_checkout():
         # Buttons
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Back to Store", use_container_width=True):
+            if st.button("Back to Store", width="stretch"):
                 st.session_state.page = 'store'
                 st.session_state.order_logged = False
                 st.rerun()
         
         with col2:
-            if st.button("Confirm Order", use_container_width=True, type='primary'):
+            if st.button("Confirm Order", width="stretch", type='primary'):
                 # ============================================================
                 # STEP 1: Validate cart is not empty
                 # ============================================================
@@ -1066,7 +1066,7 @@ def display_checkout():
                                     st.markdown("### 📊 Recent Orders (Debug Mode)")
                                     st.dataframe(
                                         feedback_df.tail(3),
-                                        use_container_width=True,
+                                        width="stretch",
                                         hide_index=True
                                     )
                                     st.caption("⚠️ Debug output - remove in production")
@@ -1283,7 +1283,7 @@ else:  # Store page
     with col_btn_2:
         generate_button = st.button(
             "Generate Cake Recommendation",
-            use_container_width=True,
+            width="stretch",
             type="primary",
             key='generate'
         )
