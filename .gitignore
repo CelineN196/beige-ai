@@ -64,6 +64,7 @@ Thumbs.db
 *.pkl
 *.pickle
 # Exception: allow v2 model pkl files for deployment
+!models/model.pkl
 !models/v2*.pkl
 !models/v2*.json
 *.log
