@@ -1596,7 +1596,9 @@ else:  # Store page
         temperature_celsius = weather_data.get('temperature', 26)
         humidity = weather_data.get('humidity', 70)
         air_quality_index = weather_data.get('aqi', 65)
-        st.session_state.time_of_day = get_time_of_day()
+        # Get time period from dynamic time detection (returns tuple of time_period, hour, debug_info)
+        time_period, hour, debug_info = get_current_time()
+        st.session_state.time_of_day = time_period
         
         with col1:
             st.markdown("<div class='input-label'>Weather</div>", unsafe_allow_html=True)
