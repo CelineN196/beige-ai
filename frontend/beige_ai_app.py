@@ -318,17 +318,47 @@ try:
     _ML_COMPAT_AVAILABLE = True
 except ModuleNotFoundError as e:
     # Fallback if module cannot be imported (e.g., in Streamlit Cloud with path issues)
-    st.warning(f"⚠️ ml_compatibility_wrapper not found — using fallback logic: {e}")
+    st.warning(f"⚠️ ml_compatibility_wrapper not found — using fallback logic")
     _ML_COMPAT_AVAILABLE = False
     
-    # Minimal fallback implementations
+    # Fallback implementations with COMPLETE structure
+    import numpy as np
+    
     class VersionInfo:
-        def __init__(self, major=1, minor=0, patch=0):
-            self.major = major
-            self.minor = minor
-            self.patch = patch
+        """Fallback VersionInfo class."""
+        @staticmethod
+        def get_versions():
+            versions = {}
+            # Get actual versions if packages are available
+            try:
+                import sklearn
+                versions['sklearn'] = sklearn.__version__
+            except:
+                versions['sklearn'] = "NOT_INSTALLED"
+            try:
+                import numpy
+                versions['numpy'] = numpy.__version__
+            except:
+                versions['numpy'] = "NOT_INSTALLED"
+            try:
+                import pandas
+                versions['pandas'] = pandas.__version__
+            except:
+                versions['pandas'] = "NOT_INSTALLED"
+            try:
+                import xgboost
+                versions['xgboost'] = xgboost.__version__
+            except:
+                versions['xgboost'] = "NOT_INSTALLED"
+            try:
+                import joblib
+                versions['joblib'] = joblib.__version__
+            except:
+                versions['joblib'] = "NOT_INSTALLED"
+            return versions
     
     class RuleBasedPredictor:
+        """Fallback rule-based predictor."""
         CAKE_MENU = [
             "Dark Chocolate Sea Salt Cake", "Matcha Zen Cake", "Citrus Cloud Cake",
             "Berry Garden Cake", "Silk Cheesecake", "Earthy Wellness Cake",
@@ -342,18 +372,52 @@ except ModuleNotFoundError as e:
         def predict(features):
             import random
             return random.randint(0, len(RuleBasedPredictor.CAKE_MENU)-1)
+        
+        @classmethod
+        def predict_proba(cls, *args, **kwargs):
+            """Return uniform probability distribution."""
+            n_cakes = len(cls.CAKE_MENU)
+            return np.ones(n_cakes) / n_cakes
     
     class SafeMLLoader:
+        """Fallback ML loader with complete status structure."""
+        def __init__(self):
+            self.model_version = "FALLBACK"
+            self.load_status = "FALLBACK_MODE"
+            self.load_error = "ml_compatibility_wrapper module not found"
+            self.is_compatible = False
+            self.model = None
+            self.preprocessor = None
+            self.versions = VersionInfo.get_versions()
+            self.is_compatible = False
+            self.compatibility_msg = "⚠️ Running in fallback mode (backend unavailable)"
+        
         def load(self):
+            """Return None for model, None for preprocessor, None for label_encoder, version string."""
             return None, None, None, "FALLBACK"
+        
         def get_status_dict(self):
-            return {"load_status": "FALLBACK", "model_version": "FALLBACK", "load_error": "Module not found"}
+            """Return COMPLETE status dict matching real implementation."""
+            return {
+                'model_version': self.model_version,
+                'load_status': self.load_status,
+                'load_error': self.load_error,
+                'versions': self.versions,
+                'is_compatible': self.is_compatible,
+                'compatibility_msg': self.compatibility_msg,
+                'model_loaded': self.model is not None,
+                'preprocessor_loaded': self.preprocessor is not None,
+            }
     
     def get_safe_ml_loader():
+        """Get fallback loader."""
         return SafeMLLoader()
     
     def get_ml_status():
-        return {"load_status": "FALLBACK", "model_version": "FALLBACK"}
+        """Get fallback status."""
+        loader = SafeMLLoader()
+        return loader.get_status_dict()
+
 
 
 @st.cache_resource
@@ -377,8 +441,18 @@ def load_ml_system():
     except Exception as e:
         if _DEBUG_ENABLED:
             st.error(f"❌ Failed to create SafeMLLoader: {e}")
-        # Return safe defaults instead of raising
-        return None, None, None, "FALLBACK", {"load_status": "FALLBACK", "model_version": "FALLBACK", "load_error": str(e)}
+        # Return safe defaults with complete status structure
+        fallback_status = {
+            'model_version': 'FALLBACK',
+            'load_status': 'FALLBACK_MODE',
+            'load_error': str(e),
+            'versions': {},
+            'is_compatible': False,
+            'compatibility_msg': '⚠️ Fallback mode - backend unavailable',
+            'model_loaded': False,
+            'preprocessor_loaded': False,
+        }
+        return None, None, None, "FALLBACK", fallback_status
     
     try:
         model, preprocessor, label_encoder, version = loader.load()
@@ -387,8 +461,18 @@ def load_ml_system():
     except Exception as e:
         if _DEBUG_ENABLED:
             st.error(f"❌ Model load() failed: {e}")
-        # Return safe defaults instead of raising
-        return None, None, None, "FALLBACK", {"load_status": "FALLBACK", "model_version": "FALLBACK", "load_error": str(e)}
+        # Return safe defaults with complete status structure
+        fallback_status = {
+            'model_version': 'FALLBACK',
+            'load_status': 'FALLBACK_MODE',
+            'load_error': str(e),
+            'versions': loader.get_status_dict().get('versions', {}),
+            'is_compatible': False,
+            'compatibility_msg': '⚠️ Fallback mode - model load failed',
+            'model_loaded': False,
+            'preprocessor_loaded': False,
+        }
+        return None, None, None, "FALLBACK", fallback_status
     
     status = loader.get_status_dict()
     
@@ -434,28 +518,37 @@ with st.sidebar:
         status = get_ml_status()
         
         # Status indicator
-        if status['load_status'] == 'SUCCESS':
-            st.success(f"✅ Model Loaded: {status['model_version']}")
-        elif status['load_status'] == 'FALLBACK':
-            st.warning(f"⚠️ Using Fallback: {status['model_version']}")
+        load_status = status.get('load_status', 'UNKNOWN')
+        model_version = status.get('model_version', 'UNKNOWN')
+        
+        if load_status == 'SUCCESS':
+            st.success(f"✅ Model Loaded: {model_version}")
+        elif load_status == 'FALLBACK' or load_status == 'FALLBACK_MODE':
+            st.warning(f"⚠️ Using Fallback: {model_version}")
         else:
-            st.info(f"ℹ️ Rule-Based Mode: {status['model_version']}")
+            st.info(f"ℹ️ Rule-Based Mode: {model_version}")
         
         # Version information
         st.write("**Versions:**")
-        for pkg, ver in status['versions'].items():
-            if ver != "NOT_INSTALLED":
-                st.write(f"- {pkg}: {ver}")
-            else:
-                st.write(f"- {pkg}: ⚠️ NOT INSTALLED")
+        versions = status.get('versions', {})
+        if versions:
+            for pkg, ver in versions.items():
+                if ver != "NOT_INSTALLED":
+                    st.write(f"- {pkg}: {ver}")
+                else:
+                    st.write(f"- {pkg}: ⚠️ NOT INSTALLED")
+        else:
+            st.write("- No version information available")
         
         # Compatibility status
-        st.write(f"**Compatibility:** {status['compatibility_msg']}")
+        compatibility_msg = status.get('compatibility_msg', 'Status unknown')
+        st.write(f"**Compatibility:** {compatibility_msg}")
         
         # Load status details
-        st.write(f"**Load Status:** {status['load_status']}")
-        if status['load_error']:
-            st.write(f"**Error:** {status['load_error']}")
+        st.write(f"**Load Status:** {load_status}")
+        load_error = status.get('load_error', None)
+        if load_error:
+            st.write(f"**Error:** {load_error}")
 
 
 # ============================================================================
