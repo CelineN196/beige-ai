@@ -307,7 +307,7 @@ def fetch_weather_data(city="Da Nang, Vietnam"):
 # ============================================================================
 
 # Import ML compatibility layer with runtime version detection
-from ml_compatibility_wrapper import (
+from backend.ml_compatibility_wrapper import (
     SafeMLLoader,
     RuleBasedPredictor,
     VersionInfo,
