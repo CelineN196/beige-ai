@@ -87,6 +87,8 @@ from data_mapping import (
     format_cake_card,
     CAKE_METADATA
 )
+from hybrid_recommender import create_or_load_system
+from beige_ai_copywriter import generate_luxury_description
 
 # Create full menu structure with prices
 FULL_MENU = [
@@ -142,6 +144,9 @@ if 'micro_story' not in st.session_state:
 
 if 'analyst_mode' not in st.session_state:
     st.session_state.analyst_mode = False
+
+if 'hybrid_recommender' not in st.session_state:
+    st.session_state.hybrid_recommender = None
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -202,6 +207,28 @@ img {
 }
 </style>
 """, unsafe_allow_html=True)
+
+# ============================================================================
+# HYBRID RECOMMENDER INITIALIZATION
+# ============================================================================
+
+@st.cache_resource
+def load_hybrid_system():
+    """Load or train the hybrid recommendation system."""
+    from hybrid_recommender import create_or_load_system
+    try:
+        system = create_or_load_system()
+        return system
+    except Exception as e:
+        st.error(f"Error loading hybrid system: {str(e)}")
+        return None
+
+# Initialize hybrid system
+try:
+    if st.session_state.hybrid_recommender is None:
+        st.session_state.hybrid_recommender = load_hybrid_system()
+except Exception as e:
+    st.warning(f"Could not initialize hybrid recommender: {str(e)}")
 
 # ============================================================================
 # PERSISTENT HEADER (ALWAYS VISIBLE)
@@ -983,8 +1010,52 @@ def display_ai_recommendations():
                 confidence=prob
             )
             
+            # Check if hybrid results are available and enhance explanation
+            hybrid_explanation = ""
+            breakdown = ""
+            if hasattr(st.session_state, 'hybrid_results') and st.session_state.hybrid_results:
+                if cake in st.session_state.hybrid_results:
+                    hybrid_data = st.session_state.hybrid_results[cake]
+                    hybrid_explanation = hybrid_data.get('explanation', '')
+                    
+                    # Show detailed hybrid scoring breakdown (optional, for analyst mode)
+                    if st.session_state.analyst_mode and hybrid_data:
+                        breakdown = (
+                            f"<div style='font-size: 0.85em; color: #666; padding-top: 8px; border-top: 1px solid #E6E2DC; margin-top: 8px;'>"
+                            f"<strong>Hybrid Score Breakdown:</strong><br>"
+                            f"• ML Probability: {hybrid_data.get('ml_probability', 0):.1%}<br>"
+                            f"• Trend Popularity: {hybrid_data.get('trend_score', 0):.1%}<br>"
+                            f"• Health Alignment: {hybrid_data.get('health_alignment', 0):.1%}<br>"
+                            f"• Cluster Affinity: {hybrid_data.get('cluster_affinity', 0):.1%}"
+                            f"</div>"
+                        )
+            
             # Find price from FULL_MENU
             cake_price = next((c['price'] for c in FULL_MENU if c['name'] == cake), 45.00)
+            
+            # =========================================================
+            # GENERATE LUXURY COPYWRITER NARRATIVE
+            # =========================================================
+            # Generate the Beige AI narrative based on metadata and context
+            try:
+                copywriter_output = generate_luxury_description(
+                    cake_name=cake,
+                    category=card_data['category'],
+                    flavor_profile=card_data['flavor'],
+                    mood=mood,
+                    weather=weather_condition,
+                    health_preference=card_data['health']
+                )
+                
+                # Extract only the narrative portion (after "Beige AI Narrative:")
+                if "Beige AI Narrative:" in copywriter_output:
+                    narrative = copywriter_output.split("Beige AI Narrative:")[1].strip()
+                else:
+                    narrative = ""
+            except Exception as e:
+                # Fallback if copywriter fails
+                narrative = ""
+                st.write(f"⚠️ Copywriter error: {e}")
             
             # Build confidence score section
             confidence_section = f"<div class='rec-confidence'>{card_data['confidence_pct']} match</div>"
@@ -995,30 +1066,44 @@ def display_ai_recommendations():
                 f"<div class='rec-detail'><strong>Wellness:</strong> {card_data['health']}/10</div>"
             )
             
+            # Build narrative section HTML
+            narrative_html = ""
+            if narrative:
+                narrative_html = f"<div class='rec-narrative'><strong>Beige AI Narrative:</strong><br><em>{narrative}</em></div>"
+            
             # Build recommendation card HTML with complete metadata
             card_html = (
                 "<div class='rec-card'>"
                 "<div class='rec-rank'>{rank}</div>"
                 "<div class='rec-name'>{cake}</div>"
                 "{confidence}"
-                "<div class='rec-description'>{description}</div>"
                 "<div class='rec-detail'><strong>Category:</strong> {category}</div>"
-                "<div class='rec-detail'><strong>Flavor:</strong> {flavor}</div>"
+                "<div class='rec-detail'><strong>Flavor Profile:</strong> {flavor}</div>"
+                "{narrative}"
                 "{technical}"
                 "</div>"
             ).format(
                 rank=card_data['rank'],
                 cake=card_data['name'],
                 confidence=confidence_section,
-                description=card_data['description'],  # Full description, not generic text
                 category=card_data['category'],
                 flavor=card_data['flavor'],
+                narrative=narrative_html,
                 technical=technical_details
             )
             st.markdown(card_html, unsafe_allow_html=True)
             
-            # Display context-aware explanation
-            st.caption(f"**Why?** {explanation}")
+            # Display explanation (prioritize hybrid if available)
+            if hybrid_explanation:
+                st.caption(f"**Why?** {hybrid_explanation}")
+                if hybrid_explanation != explanation:
+                    st.caption(f"*Context: {explanation}*")
+            else:
+                st.caption(f"**Why?** {explanation}")
+            
+            # Show breakdown if available
+            if breakdown:
+                st.markdown(breakdown, unsafe_allow_html=True)
             
             if st.button("Add to Basket", key=f"ai_{idx}_{cake}", width="stretch"):
                 st.session_state.cart.append({
@@ -1493,66 +1578,132 @@ else:  # Store page
             })
             
             # ================================================================
-            # V2-FIRST PREDICTION WITH ML/RULE-BASED FALLBACK
-            # Priority: V2 ML → Rule-based (never silent fallbacks)
+            # HYBRID RECOMMENDER SYSTEM INFERENCE
+            # 3-layer: Behavioral Segmentation → Classification → Ranking
             # ================================================================
             
-            probabilities = None
-            prediction_success = False
-            prediction_source = "UNKNOWN"
-            
-            # 🔥 STEP 1: TRY ML PREDICTIONS (V2 PREFERRED)
-            if (model is not None and preprocessor is not None and 
-                MODEL_VERSION in ["V2_PRODUCTION", "V2_RETRAINED"]):
-                try:
-                    # Preprocess input
-                    X_processed = preprocessor.transform(user_input)
+            try:
+                # Check if hybrid system is available
+                if st.session_state.hybrid_recommender is not None:
+                    # Prepare user input for hybrid system
+                    hybrid_input = {
+                        'mood': mood,
+                        'weather_condition': st.session_state.weather_condition,
+                        'temperature_celsius': temperature_celsius,
+                        'humidity': humidity,
+                        'season': season,
+                        'air_quality_index': air_quality_index,
+                        'time_of_day': st.session_state.time_of_day,
+                        'sweetness_preference': sweetness_preference,
+                        'health_preference': health_preference,
+                        'trend_popularity_score': trend_popularity_score,
+                        'temperature_category': temperature_category,
+                        'comfort_index': comfort_index,
+                        'environmental_score': environmental_score
+                    }
                     
-                    # Validate input shape
-                    expected_features = len(preprocessor.get_feature_names_out())
-                    if X_processed.shape[1] != expected_features:
-                        raise ValueError(
-                            f"Input shape mismatch: got {X_processed.shape[1]} features, "
-                            f"expected {expected_features}"
-                        )
+                    # Run hybrid inference (3-layer system)
+                    hybrid_results, cluster_id = st.session_state.hybrid_recommender.infer(hybrid_input)
                     
-                    # Make ML prediction
-                    probabilities = model.predict_proba(X_processed)[0]
-                    prediction_success = True
-                    prediction_source = f"🧠 ML ({MODEL_VERSION})"
-                    
-                    # Debug output
-                    print(f"[UI] 🧠 Using ML predictions from {MODEL_VERSION}")
-                    print(f"[UI] Probabilities shape: {probabilities.shape}")
-                    print(f"[UI] Top 3 probs: {np.sort(probabilities)[-3:][::-1]}")
-                    
-                except Exception as e:
-                    # ML prediction failed - will try rule-based
-                    print(f"[UI] ❌ ML prediction failed: {str(e)[:100]}")
-                    prediction_source = "RULE_BASED"
-            
-            # STEP 2: FALLBACK TO RULE-BASED IF ML UNAVAILABLE OR FAILED
-            if not prediction_success:
-                try:
-                    probabilities = RuleBasedPredictor.predict_proba(
-                        mood=mood,
-                        weather=st.session_state.weather_condition
+                    # Convert hybrid results to top-3 format for display compatibility
+                    # Sort results by final_score (rank)
+                    sorted_results = sorted(
+                        hybrid_results.items(),
+                        key=lambda x: x[1]['final_score'],
+                        reverse=True
                     )
+                    
+                    top_3_cakes = [cake_name for cake_name, _ in sorted_results[:3]]
+                    top_3_scores = [result['final_score'] for _, result in sorted_results[:3]]
+                    
+                    # Create probabilities array for backward compatibility
+                    probabilities = np.zeros(len(CAKE_CLASSES))
+                    for cake_name, result in sorted_results:
+                        if cake_name in CAKE_CLASSES:
+                            idx = CAKE_CLASSES.index(cake_name)
+                            probabilities[idx] = result['final_score']
+                    
+                    prediction_source = "🤖 Hybrid 3-Layer (Segmentation→Classification→Ranking)"
                     prediction_success = True
-                    prediction_source = "⚠️ Rule-Based"
                     
                     # Debug output
-                    print(f"[UI] Using rule-based recommendations")
-                    print(f"[UI] Rule-based probabilities shape: {probabilities.shape}")
+                    print(f"[UI] 🤖 Using hybrid recommendation system")
+                    print(f"[UI] Cluster assigned: {cluster_id}")
+                    print(f"[UI] Top 3 recommendations: {top_3_cakes}")
+                    print(f"[UI] Final scores: {top_3_scores}")
                     
-                except Exception as e:
-                    st.error(f"❌ Prediction failed: {str(e)}")
-                    st.stop()
+                    # Store hybrid details in session for display
+                    st.session_state.hybrid_results = hybrid_results
+                    st.session_state.cluster_id = cluster_id
+                    
+                else:
+                    # Fallback to legacy ML/Rule-based if hybrid not available
+                    print(f"[UI] Hybrid system not available, falling back to legacy prediction")
+                    prediction_success = False
+                    
+            except Exception as e:
+                st.error(f"❌ Hybrid system error: {str(e)}")
+                print(f"[UI] Hybrid inference failed: {str(e)}")
+                prediction_success = False
             
-            # Get top 3 recommendations
-            top_3_indices = np.argsort(probabilities)[-3:][::-1]
-            top_3_cakes = [CAKE_CLASSES[i] for i in top_3_indices]
-            top_3_probs = [probabilities[i] for i in top_3_indices]
+            # FALLBACK: If hybrid failed, use legacy ML → Rule-based
+            if not prediction_success:
+                probabilities = None
+                prediction_source = "UNKNOWN"
+                
+                # 🔥 STEP 1: TRY ML PREDICTIONS (V2 PREFERRED)
+                if (model is not None and preprocessor is not None and 
+                    MODEL_VERSION in ["V2_PRODUCTION", "V2_RETRAINED"]):
+                    try:
+                        # Preprocess input
+                        X_processed = preprocessor.transform(user_input)
+                        
+                        # Validate input shape
+                        expected_features = len(preprocessor.get_feature_names_out())
+                        if X_processed.shape[1] != expected_features:
+                            raise ValueError(
+                                f"Input shape mismatch: got {X_processed.shape[1]} features, "
+                                f"expected {expected_features}"
+                            )
+                        
+                        # Make ML prediction
+                        probabilities = model.predict_proba(X_processed)[0]
+                        prediction_success = True
+                        prediction_source = f"🧠 ML ({MODEL_VERSION})"
+                        
+                        # Debug output
+                        print(f"[UI] 🧠 Using ML predictions from {MODEL_VERSION}")
+                        print(f"[UI] Probabilities shape: {probabilities.shape}")
+                        print(f"[UI] Top 3 probs: {np.sort(probabilities)[-3:][::-1]}")
+                        
+                    except Exception as e:
+                        # ML prediction failed - will try rule-based
+                        print(f"[UI] ❌ ML prediction failed: {str(e)[:100]}")
+                        prediction_source = "RULE_BASED"
+                
+                # STEP 2: FALLBACK TO RULE-BASED IF ML UNAVAILABLE OR FAILED
+                if not prediction_success:
+                    try:
+                        probabilities = RuleBasedPredictor.predict_proba(
+                            mood=mood,
+                            weather=st.session_state.weather_condition
+                        )
+                        prediction_success = True
+                        prediction_source = "⚠️ Rule-Based"
+                        
+                        # Debug output
+                        print(f"[UI] Using rule-based recommendations")
+                        print(f"[UI] Rule-based probabilities shape: {probabilities.shape}")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Prediction failed: {str(e)}")
+                        st.stop()
+            
+            # Get top 3 recommendations (if not already set by hybrid)
+            if probabilities is not None:
+                top_3_indices = np.argsort(probabilities)[-3:][::-1]
+                top_3_cakes = [CAKE_CLASSES[i] for i in top_3_indices]
+                top_3_probs = [probabilities[i] for i in top_3_indices]
             
             # Save to session state
             st.session_state.ai_result = {
@@ -1576,12 +1727,15 @@ else:  # Store page
             )
             
             # Show success message with prediction source
-            if "ML" in prediction_source:
+            if "Hybrid" in prediction_source:
+                st.success(f"✨ {prediction_source}: Your personalized recommendations are ready.")
+            elif "ML" in prediction_source:
                 st.success(f"✨ {prediction_source}: Your personalized ML-powered recommendations are ready.")
             elif "Rule-Based" in prediction_source:
                 st.info(f"✨ {prediction_source}: Your personalized recommendations are ready (rule-based).")
             else:
                 st.success(f"✨ Recommendations generated: {prediction_source}")
+
 
 
     # ============================================================================

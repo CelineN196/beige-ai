@@ -320,6 +320,32 @@ html, body {
     letter-spacing: 0.05em;
 }
 
+.rec-narrative {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95em;
+    color: #4A4A4A;
+    line-height: 1.7;
+    margin: 20px 0;
+    padding: 16px 0;
+    border-top: 1px solid #E0DCD5;
+    border-bottom: 1px solid #E0DCD5;
+    letter-spacing: 0.03em;
+    font-weight: 400;
+}
+
+.rec-narrative strong {
+    color: #2C2C2C;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.rec-narrative em {
+    color: #4A4A4A;
+    font-style: italic;
+    font-weight: 300;
+}
+
 /* INSIGHT SECTION */
 .insight-section {
     padding: 80px 40px;
