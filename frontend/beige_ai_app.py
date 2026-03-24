@@ -136,8 +136,11 @@ if 'order_logged' not in st.session_state:
 if 'weather_condition' not in st.session_state:
     st.session_state.weather_condition = 'Partly Cloudy'
 
-# NOTE: time_of_day is determined dynamically, not cached
-# It will be recalculated each time get_current_time() is called
+if 'time_of_day' not in st.session_state:
+    st.session_state.time_of_day = 'Afternoon'  # Default; will be updated with actual time when get_current_time() is called
+
+# NOTE: time_of_day is determined dynamically via get_current_time()
+# and updated throughout the session as the app runs
 
 if 'micro_story' not in st.session_state:
     st.session_state.micro_story = None
