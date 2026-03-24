@@ -307,13 +307,54 @@ def fetch_weather_data(city="Da Nang, Vietnam"):
 # ============================================================================
 
 # Import ML compatibility layer with runtime version detection
-from backend.ml_compatibility_wrapper import (
-    SafeMLLoader,
-    RuleBasedPredictor,
-    VersionInfo,
-    get_safe_ml_loader,
-    get_ml_status,
-)
+try:
+    from backend.ml_compatibility_wrapper import (
+        SafeMLLoader,
+        RuleBasedPredictor,
+        VersionInfo,
+        get_safe_ml_loader,
+        get_ml_status,
+    )
+    _ML_COMPAT_AVAILABLE = True
+except ModuleNotFoundError as e:
+    # Fallback if module cannot be imported (e.g., in Streamlit Cloud with path issues)
+    st.warning(f"⚠️ ml_compatibility_wrapper not found — using fallback logic: {e}")
+    _ML_COMPAT_AVAILABLE = False
+    
+    # Minimal fallback implementations
+    class VersionInfo:
+        def __init__(self, major=1, minor=0, patch=0):
+            self.major = major
+            self.minor = minor
+            self.patch = patch
+    
+    class RuleBasedPredictor:
+        CAKE_MENU = [
+            "Dark Chocolate Sea Salt Cake", "Matcha Zen Cake", "Citrus Cloud Cake",
+            "Berry Garden Cake", "Silk Cheesecake", "Earthy Wellness Cake",
+            "Café Tiramisu", "Lavender Honey Cake", "Pistachio Rose Cake",
+            "Miso Caramel Cake", "Cardamom Spiced Cake", "Green Tea Velvet Cake",
+            "Blackberry Thyme Cake", "Turmeric Ginger Cake", "Sesame Pearl Cake",
+            "White Chocolate Lavender Cake"
+        ]
+        
+        @staticmethod
+        def predict(features):
+            import random
+            return random.randint(0, len(RuleBasedPredictor.CAKE_MENU)-1)
+    
+    class SafeMLLoader:
+        def load(self):
+            return None, None, None, "FALLBACK"
+        def get_status_dict(self):
+            return {"load_status": "FALLBACK", "model_version": "FALLBACK", "load_error": "Module not found"}
+    
+    def get_safe_ml_loader():
+        return SafeMLLoader()
+    
+    def get_ml_status():
+        return {"load_status": "FALLBACK", "model_version": "FALLBACK"}
+
 
 @st.cache_resource
 def load_ml_system():
@@ -326,6 +367,8 @@ def load_ml_system():
     """
     if _DEBUG_ENABLED:
         st.write("⏳ **Loading ML System...**")
+        if not _ML_COMPAT_AVAILABLE:
+            st.warning("ℹ️ Using fallback ML compatibility layer")
     
     try:
         loader = get_safe_ml_loader()
@@ -334,7 +377,8 @@ def load_ml_system():
     except Exception as e:
         if _DEBUG_ENABLED:
             st.error(f"❌ Failed to create SafeMLLoader: {e}")
-        raise
+        # Return safe defaults instead of raising
+        return None, None, None, "FALLBACK", {"load_status": "FALLBACK", "model_version": "FALLBACK", "load_error": str(e)}
     
     try:
         model, preprocessor, label_encoder, version = loader.load()
@@ -343,7 +387,8 @@ def load_ml_system():
     except Exception as e:
         if _DEBUG_ENABLED:
             st.error(f"❌ Model load() failed: {e}")
-        raise
+        # Return safe defaults instead of raising
+        return None, None, None, "FALLBACK", {"load_status": "FALLBACK", "model_version": "FALLBACK", "load_error": str(e)}
     
     status = loader.get_status_dict()
     
