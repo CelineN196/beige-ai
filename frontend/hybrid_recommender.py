@@ -16,6 +16,7 @@ from pathlib import Path
 import pickle
 import warnings
 from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.impute import SimpleImputer
 from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
@@ -67,6 +68,7 @@ class BehavioralSegmentation:
         self.n_clusters = n_clusters
         self.kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
         self.scaler = StandardScaler()
+        self.imputer = SimpleImputer(strategy='mean')
         self.is_fitted = False
     
     def fit(self, df):
@@ -74,9 +76,12 @@ class BehavioralSegmentation:
         X = df[INPUT_FEATURES].copy()
         # Encode categorical features
         X = self._encode_categorical(X)
-        
+        # Validate and clean data
+        X = self._validate_and_clean(X, stage='fit')
+        # Impute any remaining NaNs
+        X_imputed = self.imputer.fit_transform(X)
         # Scale features
-        X_scaled = self.scaler.fit_transform(X)
+        X_scaled = self.scaler.fit_transform(X_imputed)
         
         # Fit KMeans
         self.kmeans.fit(X_scaled)
@@ -96,14 +101,67 @@ class BehavioralSegmentation:
         
         X = df[INPUT_FEATURES].copy()
         X = self._encode_categorical(X)
-        X_scaled = self.scaler.transform(X)
+        # Validate and clean data
+        X = self._validate_and_clean(X, stage='predict')
+        # Impute any remaining NaNs
+        X_imputed = self.imputer.transform(X)
+        X_scaled = self.scaler.transform(X_imputed)
+        
+        # Final safety check
+        assert not np.isnan(X_scaled).any(), "NaN values detected in scaled features before KMeans.predict()"
         
         cluster_ids = self.kmeans.predict(X_scaled)
         return cluster_ids
     
     @staticmethod
+    def _validate_and_clean(X, stage='predict'):
+        """
+        Validate input data and clean NaN values.
+        
+        Args:
+            X: DataFrame with features
+            stage: 'fit' or 'predict' for logging
+            
+        Returns:
+            Cleaned DataFrame
+        """
+        X = X.copy()
+        
+        # Log NaN summary before cleaning
+        nan_summary = X.isna().sum()
+        if nan_summary.sum() > 0:
+            print(f"⚠️ [{stage}] Found NaN values in features:")
+            for col, count in nan_summary[nan_summary > 0].items():
+                print(f"   {col}: {count} missing values")
+        
+        # Fill NaNs in categorical columns with mode (most common value)
+        categorical_cols = ['mood', 'weather_condition', 'season', 'time_of_day', 'temperature_category']
+        for col in categorical_cols:
+            if col in X.columns and X[col].isna().any():
+                mode_val = X[col].mode()[0] if len(X[col].mode()) > 0 else 'Happy'
+                print(f"   Filling {col} NaNs with: {mode_val}")
+                X[col].fillna(mode_val, inplace=True)
+        
+        # Fill NaNs in numeric columns with 0 (safe for environmental scores)
+        numeric_cols = [col for col in X.columns if X[col].dtype in ['float64', 'int64']]
+        for col in numeric_cols:
+            if X[col].isna().any():
+                print(f"   Filling {col} NaNs with: 0")
+                X[col].fillna(0, inplace=True)
+        
+        # Final check
+        if X.isna().any().any():
+            print(f"❌ [{stage}] Warning: Still have NaNs after cleaning!")
+            print(f"   {X.isna().sum().sum()} NaNs remaining")
+        
+        return X
+    
+    @staticmethod
     def _encode_categorical(X):
-        """Simple one-hot or label encoding for categorical features."""
+        """
+        Safely encode categorical features with NaN handling.
+        Unmapped values are set to 0 (safe default).
+        """
         X = X.copy()
         
         categorical_cols = {
@@ -116,9 +174,10 @@ class BehavioralSegmentation:
         
         for col, categories in categorical_cols.items():
             if col in X.columns:
-                X[col] = X[col].astype(str).map(
-                    {cat: idx for idx, cat in enumerate(categories)}
-                )
+                # Create mapping with safe default (0)
+                mapping = {cat: idx for idx, cat in enumerate(categories)}
+                # Apply mapping and fill unmapped values with 0
+                X[col] = X[col].astype(str).map(mapping).fillna(0).astype(int)
         
         return X
 
@@ -143,6 +202,7 @@ class CakePredictionClassifier:
         )
         self.label_encoder = LabelEncoder()
         self.feature_scaler = StandardScaler()
+        self.imputer = SimpleImputer(strategy='mean')
         self.is_fitted = False
         self.n_classes = 0
         self.classes_ = None
@@ -157,7 +217,11 @@ class CakePredictionClassifier:
         feature_cols = INPUT_FEATURES + ['cluster_id']
         X = df[feature_cols].copy()
         X = self._encode_features(X)
-        X_scaled = self.feature_scaler.fit_transform(X)
+        # Validate and clean
+        X = self._validate_and_clean(X, stage='fit')
+        # Impute remaining NaNs
+        X_imputed = self.imputer.fit_transform(X)
+        X_scaled = self.feature_scaler.fit_transform(X_imputed)
         
         # Encode target
         y = df[TARGET].copy()
@@ -182,7 +246,14 @@ class CakePredictionClassifier:
         feature_cols = INPUT_FEATURES + ['cluster_id']
         X = df[feature_cols].copy()
         X = self._encode_features(X)
-        X_scaled = self.feature_scaler.transform(X)
+        # Validate and clean
+        X = self._validate_and_clean(X, stage='predict')
+        # Impute remaining NaNs
+        X_imputed = self.imputer.transform(X)
+        X_scaled = self.feature_scaler.transform(X_imputed)
+        
+        # Final safety check
+        assert not np.isnan(X_scaled).any(), "NaN values detected in scaled features before classifier.predict_proba()"
         
         proba = self.classifier.predict_proba(X_scaled)
         
@@ -197,8 +268,35 @@ class CakePredictionClassifier:
         return result_list
     
     @staticmethod
+    def _validate_and_clean(X, stage='predict'):
+        """Validate input data and clean NaN values."""
+        X = X.copy()
+        
+        # Log NaN summary
+        nan_summary = X.isna().sum()
+        if nan_summary.sum() > 0:
+            print(f"⚠️ [{stage}] Found NaN values in classifier features:")
+            for col, count in nan_summary[nan_summary > 0].items():
+                print(f"   {col}: {count} missing values")
+        
+        # Fill categorical NaNs with mode
+        categorical_cols = ['mood', 'weather_condition', 'season', 'time_of_day', 'temperature_category']
+        for col in categorical_cols:
+            if col in X.columns and X[col].isna().any():
+                mode_val = X[col].mode()[0] if len(X[col].mode()) > 0 else 0
+                X[col].fillna(mode_val, inplace=True)
+        
+        # Fill numeric NaNs with 0
+        numeric_cols = [col for col in X.columns if X[col].dtype in ['float64', 'int64']]
+        for col in numeric_cols:
+            if X[col].isna().any():
+                X[col].fillna(0, inplace=True)
+        
+        return X
+    
+    @staticmethod
     def _encode_features(X):
-        """Encode categorical features in input."""
+        """Safely encode categorical features with NaN handling."""
         X = X.copy()
         
         categorical_cols = {
@@ -211,9 +309,9 @@ class CakePredictionClassifier:
         
         for col, categories in categorical_cols.items():
             if col in X.columns:
-                X[col] = X[col].astype(str).map(
-                    {cat: idx for idx, cat in enumerate(categories)}
-                )
+                mapping = {cat: idx for idx, cat in enumerate(categories)}
+                # Safe mapping: unmapped values become 0 instead of NaN
+                X[col] = X[col].astype(str).map(mapping).fillna(0).astype(int)
         
         return X
 
