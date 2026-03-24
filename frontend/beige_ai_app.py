@@ -136,8 +136,8 @@ if 'order_logged' not in st.session_state:
 if 'weather_condition' not in st.session_state:
     st.session_state.weather_condition = 'Partly Cloudy'
 
-if 'time_of_day' not in st.session_state:
-    st.session_state.time_of_day = 'Afternoon'
+# NOTE: time_of_day is determined dynamically, not cached
+# It will be recalculated each time get_current_time() is called
 
 if 'micro_story' not in st.session_state:
     st.session_state.micro_story = None
@@ -258,17 +258,32 @@ if st.session_state.analyst_mode:
 else:
     st.session_state.analyst_mode = False
 
-def get_time_of_day():
-    """Determine time of day from system time."""
-    hour = datetime.now().hour
+def get_current_time():
+    """
+    Determine time of day from system time (DYNAMIC, NOT CACHED).
+    This function always returns the actual current time, never cached.
+    
+    Returns:
+        tuple: (time_period_str, hour_24, debug_info)
+    """
+    now = datetime.now()
+    hour = now.hour
+    minute = now.minute
+    
+    # Determine time period
     if 5 <= hour < 12:
-        return 'Morning'
+        time_period = 'Morning'
     elif 12 <= hour < 17:
-        return 'Afternoon'
+        time_period = 'Afternoon'
     elif 17 <= hour <= 20:
-        return 'Evening'
+        time_period = 'Evening'
     else:
-        return 'Night'
+        time_period = 'Night'
+    
+    # Debug info for logging
+    debug_info = f"[{hour:02d}:{minute:02d}] -> {time_period}"
+    
+    return time_period, hour, debug_info
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def fetch_weather_data(city="Da Nang, Vietnam"):
@@ -1134,18 +1149,27 @@ def display_ai_recommendations():
     # =================================================================
     # STEP 3: RENDER CARDS WITH COMPLETE METADATA & EXPLANATIONS
     # =================================================================
+    
+    # 🔴 CRITICAL FIX: Get ACTUAL current time (not cached/session state)
+    current_time_period, current_hour, time_debug = get_current_time()
+    
+    # Debug logging for time detection
+    st.caption(f"🕐 **System Time**: {time_debug} (Using live system time, not cached)")
+    
     for idx, (cake, prob) in enumerate(zip(top_3_cakes, top_3_probs)):
         with rec_cols[idx]:
             # Get comprehensive metadata (no N/A values)
             card_data = format_cake_card(cake, confidence=prob, rank=roman_numerals[idx])
             
-            # Get context-aware explanation
+            # 🔴 CRITICAL FIX: Pass ACTUAL current time to explanation generator
+            # NOT result.get("time_of_day") which is cached/hardcoded
             explanation = explain_recommendation(
                 cake_name=cake,
                 mood=mood,
                 weather=weather_condition,
-                time_of_day=result.get("time_of_day", "afternoon"),
-                confidence=prob
+                time_of_day=current_time_period,  # LIVE current time from get_current_time()
+                confidence=prob,
+                debug=True  # Enable debug logging to see time detection
             )
             
             # Check if hybrid results are available and enhance explanation

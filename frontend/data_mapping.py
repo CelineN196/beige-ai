@@ -247,63 +247,141 @@ def explain_recommendation(
     mood: str,
     weather: str,
     time_of_day: str,
-    confidence: float
+    confidence: float,
+    debug: bool = False
 ) -> str:
     """
-    Generate a natural language explanation for why this cake was recommended.
+    Generate a DYNAMIC, time-aware explanation for why this cake was recommended.
+    
+    CRITICAL: This function now creates UNIQUE narratives per cake based on:
+    - Item-specific properties from metadata
+    - Actual current time (not hardcoded)
+    - Mood + weather context
     
     Args:
         cake_name: Name of the recommended cake
         mood: Current mood (happy, stressed, tired, etc.)
         weather: Current weather condition
-        time_of_day: Current time of day
+        time_of_day: Current time of day (should be LIVE, not cached)
         confidence: ML confidence score (0-1)
+        debug: If True, print time detection info
     
     Returns:
-        Natural language explanation of the recommendation
+        Natural language explanation (UNIQUE per cake + time)
     """
+    from datetime import datetime
+    
+    # Get ACTUAL current time for validation
+    actual_hour = datetime.now().hour
+    
+    # Determine actual time period (NOT from session state)
+    if 5 <= actual_hour < 12:
+        actual_time_period = 'morning'
+    elif 12 <= actual_hour < 17:
+        actual_time_period = 'afternoon'
+    elif 17 <= actual_hour <= 20:
+        actual_time_period = 'evening'
+    else:
+        actual_time_period = 'night'
+    
+    # DEBUG: Log detected vs expected time
+    if debug:
+        print(f"🕐 [TIME DEBUG] Actual: {actual_time_period.upper()} ({actual_hour:02d}:00) | Session: {time_of_day}")
+    
+    # Use ACTUAL time, not session state
+    time_period = actual_time_period
+    
     metadata = get_cake_metadata(cake_name)
     explanations = []
     
-    # Mood-based explanation
+    # ========================================================================
+    # MOOD-BASED EXPLANATION (Item-specific + mood)
+    # ========================================================================
     mood_lower = mood.lower()
     if mood_lower in metadata.get("mood_pairing", []):
+        # Create unique mood narrative based on cake properties
+        flavor = metadata.get("flavor_profile", "balanced").lower()
         if mood_lower == "stressed" or mood_lower == "tired":
-            explanations.append(f"Perfect for your {mood_lower} state—{cake_name} offers comfort and grounding.")
+            explanations.append(
+                f"Perfect for your {mood_lower} state—this {flavor} composition "
+                f"in {cake_name} provides comfort and grounding."
+            )
         elif mood_lower == "happy" or mood_lower == "celebratory":
-            explanations.append(f"Celebrates your {mood_lower} mood—{cake_name} elevates the moment.")
+            explanations.append(
+                f"Celebrates your {mood_lower} mood—{cake_name}'s {flavor} profile "
+                f"elevates the moment with joy."
+            )
         elif mood_lower == "energetic" or mood_lower == "focused":
-            explanations.append(f"Matches your {mood_lower} energy—{cake_name} sustains focus and vitality.")
+            explanations.append(
+                f"Matches your {mood_lower} energy—{cake_name} sustains "
+                f"focus and vitality through its crafted composition."
+            )
         elif mood_lower == "calm" or mood_lower == "contemplative":
-            explanations.append(f"Complements your {mood_lower} state—{cake_name} deepens introspection.")
+            explanations.append(
+                f"Complements your {mood_lower} state—the {flavor} notes "
+                f"in {cake_name} deepen introspection."
+            )
     
-    # Weather-based explanation
+    # ========================================================================
+    # WEATHER-BASED EXPLANATION (Item-specific + weather)
+    # ========================================================================
     weather_lower = weather.lower()
     if weather_lower in metadata.get("weather_pairing", []) or "any" in metadata.get("weather_pairing", []):
+        category = metadata.get("category", "dessert")
         if weather_lower == "cold" or weather_lower == "rainy":
-            explanations.append(f"Ideal for the {weather_lower} weather—{cake_name} brings warmth and comfort.")
+            explanations.append(
+                f"Perfect for the {weather_lower} weather right now—"
+                f"{cake_name}'s warm, {category.lower()} character brings comfort."
+            )
         elif weather_lower == "hot" or weather_lower == "sunny":
-            explanations.append(f"Perfect for the {weather_lower} conditions—{cake_name} offers refreshment.")
+            explanations.append(
+                f"Ideal for the {weather_lower} conditions—"
+                f"{cake_name} offers a refreshing contrast with its balanced indulgence."
+            )
     
-    # Time-based explanation
-    time_lower = time_of_day.lower()
-    if time_lower in metadata.get("time_pairing", []) or "any" in metadata.get("time_pairing", []):
-        if time_lower == "morning":
-            explanations.append(f"Ideal for morning—{cake_name} awakens the senses.")
-        elif time_lower == "afternoon":
-            explanations.append(f"Perfect for afternoon—{cake_name} provides the ideal indulgence.")
-        elif time_lower == "evening":
-            explanations.append(f"Suited for evening—{cake_name} offers comfort and relaxation.")
-        elif time_lower == "night":
-            explanations.append(f"Ideal for night—{cake_name} provides ritual and restoration.")
+    # ========================================================================
+    # TIME-BASED EXPLANATION (Dynamic based on ACTUAL current time)
+    # ========================================================================
+    if time_period in metadata.get("time_pairing", []) or "any" in metadata.get("time_pairing", []):
+        category = metadata.get("category", "indulgence")
+        texture = metadata.get("texture", "exquisite")
+        
+        # Create UNIQUE narratives per time period using cake-specific details
+        if time_period == "morning":
+            explanations.append(
+                f"RIGHT NOW (morning)—{cake_name} awakens the senses with "
+                f"its {texture} {category.lower()}, perfect for starting your day."
+            )
+        elif time_period == "afternoon":
+            explanations.append(
+                f"RIGHT NOW (afternoon)—{cake_name} provides the ideal indulgence "
+                f"for this perfect moment, a {texture} pause in your day."
+            )
+        elif time_period == "evening":
+            explanations.append(
+                f"RIGHT NOW (evening)—{cake_name} offers warmth and comfort, "
+                f"its {texture} composition suited to a reflective close to your day."
+            )
+        elif time_period == "night":
+            explanations.append(
+                f"RIGHT NOW (night)—{cake_name} provides ritual and deep satisfaction, "
+                f"its {texture} character perfect for quieter moments."
+            )
     
-    # If no contextual matches, provide generic explanation
+    # ========================================================================
+    # FALLBACK: Item-specific generic explanation
+    # ========================================================================
     if not explanations:
         category = metadata.get("category", "Signature")
         flavor = metadata.get("flavor_profile", "Balanced")
-        explanations.append(f"{cake_name}—a {category.lower()} choice with {flavor.lower()} notes—matches your current context.")
+        explanations.append(
+            f"{cake_name}—a {category.lower()} choice with {flavor.lower()} notes—"
+            f"matches your {time_period} context perfectly."
+        )
     
-    # Add confidence statement
+    # ========================================================================
+    # CONFIDENCE STATEMENT
+    # ========================================================================
     if confidence >= 0.8:
         confidence_text = "Our AI is highly confident in this recommendation."
     elif confidence >= 0.6:
