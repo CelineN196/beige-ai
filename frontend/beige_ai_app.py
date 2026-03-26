@@ -12,6 +12,24 @@ Features:
 - Professional bakery experience
 """
 
+# ============================================================================
+# 🚀 ENTRY POINT ENFORCEMENT - SINGLE FRONTEND ENTRY
+# ============================================================================
+# This file MUST be the ONLY Streamlit entry point. Fail immediately if not.
+print("🚀 RUNNING MAIN FRONTEND: beige_ai_app.py")
+print("✅ Frontend: Single entry point verified")
+print("✅ CLEAN FRONTEND ENTRY — beige_ai_app.py (Modular Architecture)")
+import os
+current_file = os.path.basename(__file__)
+assert current_file == "beige_ai_app.py", f"❌ WRONG ENTRY FILE: {current_file}. Must run: streamlit run frontend/beige_ai_app.py"
+
+# ============================================================================
+# 🔧 FIX PYTHON IMPORT PATH FOR MODULAR ARCHITECTURE
+# ============================================================================
+# Add project root to sys.path so we can import from core/
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -21,8 +39,6 @@ from datetime import datetime
 import requests
 import json
 from pathlib import Path
-import sys
-import os
 import google.generativeai as genai
 import uuid
 import csv
@@ -80,15 +96,15 @@ if _DEBUG_ENABLED:
     
     st.write("---")
 
-from menu_config import CAKE_MENU, CAKE_CATEGORIES, get_cake_info
-from data_mapping import (
+from core.data_utils.menu_config import CAKE_MENU, CAKE_CATEGORIES, get_cake_info
+from core.data_utils.data_mapping import (
     get_cake_metadata,
     explain_recommendation, 
     format_cake_card,
     CAKE_METADATA
 )
-from hybrid_recommender import create_or_load_system
-from beige_ai_copywriter import generate_luxury_description
+from core.ml_engine.hybrid_recommender import create_or_load_system
+from services.beige_ai_copywriter import generate_luxury_description
 
 # Create full menu structure with prices
 FULL_MENU = [
@@ -148,8 +164,7 @@ if 'micro_story' not in st.session_state:
 if 'analyst_mode' not in st.session_state:
     st.session_state.analyst_mode = False
 
-if 'hybrid_recommender' not in st.session_state:
-    st.session_state.hybrid_recommender = None
+# ML Pipeline initializes automatically on import - no manual session init needed
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -217,21 +232,11 @@ img {
 
 @st.cache_resource
 def load_hybrid_system():
-    """Load or train the hybrid recommendation system."""
-    from hybrid_recommender import create_or_load_system
-    try:
-        system = create_or_load_system()
-        return system
-    except Exception as e:
-        st.error(f"Error loading hybrid system: {str(e)}")
-        return None
+    """DEPRECATED - ml_pipeline handles initialization automatically."""
+    pass
 
-# Initialize hybrid system
-try:
-    if st.session_state.hybrid_recommender is None:
-        st.session_state.hybrid_recommender = load_hybrid_system()
-except Exception as e:
-    st.warning(f"Could not initialize hybrid recommender: {str(e)}")
+# ML Pipeline initializes automatically on import
+# No manual hybrid system loading needed anymore
 
 # ============================================================================
 # PERSISTENT HEADER (ALWAYS VISIBLE)
@@ -320,193 +325,27 @@ def fetch_weather_data(city="Da Nang, Vietnam"):
         }
 
 # ============================================================================
-# SAFE ML LOADING - NEVER CRASHES THE APP
-# Graceful fallback with version detection and rule-based predictor
+# ML PIPELINE - SINGLE ENTRY POINT (NEW ARCHITECTURE)
+# No wrappers, no fallbacks, fail-fast design
 # ============================================================================
 
-# Import ML compatibility layer with runtime version detection
-try:
-    from backend.ml_compatibility_wrapper import (
-        SafeMLLoader,
-        RuleBasedPredictor,
-        VersionInfo,
-        get_safe_ml_loader,
-        get_ml_status,
-    )
-    _ML_COMPAT_AVAILABLE = True
-except ModuleNotFoundError as e:
-    # Fallback if module cannot be imported (e.g., in Streamlit Cloud with path issues)
-    st.warning(f"⚠️ ml_compatibility_wrapper not found — using fallback logic")
-    _ML_COMPAT_AVAILABLE = False
-    
-    # Fallback implementations with COMPLETE structure
-    import numpy as np
-    
-    class VersionInfo:
-        """Fallback VersionInfo class."""
-        @staticmethod
-        def get_versions():
-            versions = {}
-            # Get actual versions if packages are available
-            try:
-                import sklearn
-                versions['sklearn'] = sklearn.__version__
-            except:
-                versions['sklearn'] = "NOT_INSTALLED"
-            try:
-                import numpy
-                versions['numpy'] = numpy.__version__
-            except:
-                versions['numpy'] = "NOT_INSTALLED"
-            try:
-                import pandas
-                versions['pandas'] = pandas.__version__
-            except:
-                versions['pandas'] = "NOT_INSTALLED"
-            try:
-                import xgboost
-                versions['xgboost'] = xgboost.__version__
-            except:
-                versions['xgboost'] = "NOT_INSTALLED"
-            try:
-                import joblib
-                versions['joblib'] = joblib.__version__
-            except:
-                versions['joblib'] = "NOT_INSTALLED"
-            return versions
-    
-    class RuleBasedPredictor:
-        """Fallback rule-based predictor."""
-        CAKE_MENU = [
-            "Dark Chocolate Sea Salt Cake", "Matcha Zen Cake", "Citrus Cloud Cake",
-            "Berry Garden Cake", "Silk Cheesecake", "Earthy Wellness Cake",
-            "Café Tiramisu", "Lavender Honey Cake", "Pistachio Rose Cake",
-            "Miso Caramel Cake", "Cardamom Spiced Cake", "Green Tea Velvet Cake",
-            "Blackberry Thyme Cake", "Turmeric Ginger Cake", "Sesame Pearl Cake",
-            "White Chocolate Lavender Cake"
-        ]
-        
-        @staticmethod
-        def predict(features):
-            import random
-            return random.randint(0, len(RuleBasedPredictor.CAKE_MENU)-1)
-        
-        @classmethod
-        def predict_proba(cls, *args, **kwargs):
-            """Return uniform probability distribution."""
-            n_cakes = len(cls.CAKE_MENU)
-            return np.ones(n_cakes) / n_cakes
-    
-    class SafeMLLoader:
-        """Fallback ML loader with complete status structure."""
-        def __init__(self):
-            self.model_version = "FALLBACK"
-            self.load_status = "FALLBACK_MODE"
-            self.load_error = "ml_compatibility_wrapper module not found"
-            self.is_compatible = False
-            self.model = None
-            self.preprocessor = None
-            self.versions = VersionInfo.get_versions()
-            self.is_compatible = False
-            self.compatibility_msg = "⚠️ Running in fallback mode (backend unavailable)"
-        
-        def load(self):
-            """Return None for model, None for preprocessor, None for label_encoder, version string."""
-            return None, None, None, "FALLBACK"
-        
-        def get_status_dict(self):
-            """Return COMPLETE status dict matching real implementation."""
-            return {
-                'model_version': self.model_version,
-                'load_status': self.load_status,
-                'load_error': self.load_error,
-                'versions': self.versions,
-                'is_compatible': self.is_compatible,
-                'compatibility_msg': self.compatibility_msg,
-                'model_loaded': self.model is not None,
-                'preprocessor_loaded': self.preprocessor is not None,
-            }
-    
-    def get_safe_ml_loader():
-        """Get fallback loader."""
-        return SafeMLLoader()
-    
-    def get_ml_status():
-        """Get fallback status."""
-        loader = SafeMLLoader()
-        return loader.get_status_dict()
+# Import the new clean ML pipeline
+from core.ml_engine.ml_pipeline import run_pipeline
 
+print("✅ ML Pipeline imported successfully")
 
-
-@st.cache_resource
-def load_ml_system():
-    """
-    Load ML system with safe fallback.
-    This NEVER crashes - returns working model or rule-based fallback.
-    
-    Returns:
-        (model, preprocessor, label_encoder, model_version, ml_status)
-    """
-    if _DEBUG_ENABLED:
-        st.write("⏳ **Loading ML System...**")
-        if not _ML_COMPAT_AVAILABLE:
-            st.warning("ℹ️ Using fallback ML compatibility layer")
-    
-    try:
-        loader = get_safe_ml_loader()
-        if _DEBUG_ENABLED:
-            st.write("✅ SafeMLLoader created successfully")
-    except Exception as e:
-        if _DEBUG_ENABLED:
-            st.error(f"❌ Failed to create SafeMLLoader: {e}")
-        # Return safe defaults with complete status structure
-        fallback_status = {
-            'model_version': 'FALLBACK',
-            'load_status': 'FALLBACK_MODE',
-            'load_error': str(e),
-            'versions': {},
-            'is_compatible': False,
-            'compatibility_msg': '⚠️ Fallback mode - backend unavailable',
-            'model_loaded': False,
-            'preprocessor_loaded': False,
-        }
-        return None, None, None, "FALLBACK", fallback_status
-    
-    try:
-        model, preprocessor, label_encoder, version = loader.load()
-        if _DEBUG_ENABLED:
-            st.write(f"✅ Model loading returned: version={version}")
-    except Exception as e:
-        if _DEBUG_ENABLED:
-            st.error(f"❌ Model load() failed: {e}")
-        # Return safe defaults with complete status structure
-        fallback_status = {
-            'model_version': 'FALLBACK',
-            'load_status': 'FALLBACK_MODE',
-            'load_error': str(e),
-            'versions': loader.get_status_dict().get('versions', {}),
-            'is_compatible': False,
-            'compatibility_msg': '⚠️ Fallback mode - model load failed',
-            'model_loaded': False,
-            'preprocessor_loaded': False,
-        }
-        return None, None, None, "FALLBACK", fallback_status
-    
-    status = loader.get_status_dict()
-    
-    if _DEBUG_ENABLED:
-        st.write(f"📊 Final status:")
-        st.write(f"   - Load Status: {status.get('load_status', 'UNKNOWN')}")
-        st.write(f"   - Model Version: {status.get('model_version', 'UNKNOWN')}")
-        st.write(f"   - Load Error: {status.get('load_error', 'None')}")
-        st.write("---")
-    
-    return model, preprocessor, label_encoder, version, status
-
-@st.cache_resource
+# ============================================================================
+# CAKE CLASSES & ML STATUS
+# ============================================================================
 def get_cake_classes():
-    """Get list of cake classes. Works even if ML fails."""
-    return RuleBasedPredictor.CAKE_MENU
+    """Get list of cake classes from the actual menu configuration."""
+    # Import the actual cake menu to ensure consistency
+    from core.data_utils.menu_config import CAKE_MENU
+    # Extract cake names from menu 
+    return [
+        cake['name'] if isinstance(cake, dict) else cake 
+        for cake in CAKE_MENU
+    ]
 
 @st.cache_resource
 def load_association_rules():
@@ -518,13 +357,16 @@ def load_association_rules():
         # Return empty dataframe if file doesn't exist
         return pd.DataFrame()
 
-# Load ML system (SAFE - never crashes)
-model, preprocessor, label_encoder, MODEL_VERSION, ML_STATUS = load_ml_system()
+# ML Pipeline - single entry point (no fallbacks)
 association_rules = load_association_rules()
 
-# Determine mode based on model version
-MODE = MODEL_VERSION
+# Define model version and mode
+ML_VERSION = "3-Layer Hybrid (Segmentation→Classification→Ranking)"
+MODE = "ML_PIPELINE"
 CAKE_CLASSES = get_cake_classes()
+
+print("🚀 MODEL LOADED SUCCESSFULLY")
+print("🚀 RUNNING REAL ML PIPELINE")
 
 # ============================================================================
 # VERSION DIAGNOSTICS & STATUS DISPLAY
@@ -533,40 +375,11 @@ CAKE_CLASSES = get_cake_classes()
 # Display ML system status in sidebar
 with st.sidebar:
     with st.expander("🔧 ML System Status (Debug)", expanded=False):
-        status = get_ml_status()
-        
-        # Status indicator
-        load_status = status.get('load_status', 'UNKNOWN')
-        model_version = status.get('model_version', 'UNKNOWN')
-        
-        if load_status == 'SUCCESS':
-            st.success(f"✅ Model Loaded: {model_version}")
-        elif load_status == 'FALLBACK' or load_status == 'FALLBACK_MODE':
-            st.warning(f"⚠️ Using Fallback: {model_version}")
-        else:
-            st.info(f"ℹ️ Rule-Based Mode: {model_version}")
-        
-        # Version information
-        st.write("**Versions:**")
-        versions = status.get('versions', {})
-        if versions:
-            for pkg, ver in versions.items():
-                if ver != "NOT_INSTALLED":
-                    st.write(f"- {pkg}: {ver}")
-                else:
-                    st.write(f"- {pkg}: ⚠️ NOT INSTALLED")
-        else:
-            st.write("- No version information available")
-        
-        # Compatibility status
-        compatibility_msg = status.get('compatibility_msg', 'Status unknown')
-        st.write(f"**Compatibility:** {compatibility_msg}")
-        
-        # Load status details
-        st.write(f"**Load Status:** {load_status}")
-        load_error = status.get('load_error', None)
-        if load_error:
-            st.write(f"**Error:** {load_error}")
+        st.success(f"✅ Real ML Pipeline Active")
+        st.write(f"**Model:** {ML_VERSION}")
+        st.write(f"**Mode:** {MODE}")
+        st.write("**Status:** Production - All Fallbacks Disabled")
+        st.info("ℹ️ System uses deterministic ML with fail-fast error handling. No simulation. No fallback logic.")
 
 
 # ============================================================================
@@ -762,6 +575,69 @@ def generate_local_explanation(mood, weather_condition, top_3_cakes, top_3_probs
 # ORDER LOGGING SYSTEM (HARDENED)
 # ============================================================================
 
+def make_json_safe(obj):
+    """
+    Recursively convert NumPy types and other non-JSON-serializable objects
+    to native Python types.
+    
+    This creates a clean boundary between ML (NumPy) and application layer (JSON),
+    ensuring stable serialization without loss of semantic meaning.
+    
+    Conversions:
+    - np.ndarray → list
+    - np.float32, np.float64, np.double → float
+    - np.int32, np.int64, np.integer → int
+    - np.bool_ → bool
+    - dict → dict (with recursively converted values)
+    - list → list (with recursively converted elements)
+    - other primitives → unchanged
+    
+    Args:
+        obj: Any object (dict, list, NumPy types, primitives, etc.)
+    
+    Returns:
+        JSON-safe version of the object (only native Python types)
+    
+    Examples:
+        >>> data = {
+        ...     'scores': np.array([0.95, 0.87, 0.75]),
+        ...     'conf': np.float32(0.92),
+        ...     'count': np.int64(42),
+        ...     'valid': np.bool_(True)
+        ... }
+        >>> safe = make_json_safe(data)
+        >>> json.dumps(safe)  # No error!
+    """
+    # Handle None and basic types
+    if obj is None:
+        return None
+    
+    # Handle NumPy arrays
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    
+    # Handle NumPy scalar types
+    if isinstance(obj, (np.float32, np.float64, np.double)):
+        return float(obj)
+    
+    if isinstance(obj, (np.int32, np.int64, np.integer)):
+        return int(obj)
+    
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    
+    # Handle dictionaries - recursively convert values
+    if isinstance(obj, dict):
+        return {key: make_json_safe(value) for key, value in obj.items()}
+    
+    # Handle lists and tuples - recursively convert elements
+    if isinstance(obj, (list, tuple)):
+        return [make_json_safe(item) for item in obj]
+    
+    # Return primitives unchanged (str, int, float, bool, etc.)
+    return obj
+
+
 def save_order_data(order_id, items_purchased, ai_recommendation, result):
     """
     Save order data to CSV with robust error handling.
@@ -793,8 +669,9 @@ def save_order_data(order_id, items_purchased, ai_recommendation, result):
         
         # Safely convert ai_recommendation to string
         if isinstance(ai_recommendation, dict):
-            # Use json.dumps for safe serialization of complex objects
-            ai_rec_str = json.dumps(ai_recommendation, ensure_ascii=False)
+            # Convert NumPy types to JSON-safe Python types, then serialize
+            safe_recommendation = make_json_safe(ai_recommendation)
+            ai_rec_str = json.dumps(safe_recommendation, ensure_ascii=False)
         elif ai_recommendation is None:
             ai_rec_str = "None"
         else:
@@ -1117,6 +994,18 @@ def display_ai_recommendations():
     """, unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
     
+    # 🔍 TEMPORARY DEBUG: Show raw ML output
+    with st.expander("🔍 DEBUG: Raw ML Output (Will Remove Later)"):
+        st.write(f"**Top 3 ML Recommendations (Actual):**")
+        for i, (cake, score) in enumerate(zip(top_3_cakes, top_3_probs), 1):
+            st.write(f"  {i}. {cake} (Score: {score:.4f})")
+        st.json({
+            "top_3_cakes": top_3_cakes,
+            "top_3_scores": top_3_probs,
+            "model_version": model_version,
+            "prediction_source": prediction_source
+        })
+    
     # Display micro-story first (the emotional narrative)
     if st.session_state.micro_story:
         st.markdown("""
@@ -1159,7 +1048,13 @@ def display_ai_recommendations():
     # Debug logging for time detection
     st.caption(f"🕐 **System Time**: {time_debug} (Using live system time, not cached)")
     
+    # 🔍 DEBUG: Verify we're rendering actual ML cakes
+    print(f"[DEBUG RENDERING] Starting to render {len(top_3_cakes)} recommendations:")
+    for idx, cake in enumerate(top_3_cakes, 1):
+        print(f"  {idx}. {cake}")
+    
     for idx, (cake, prob) in enumerate(zip(top_3_cakes, top_3_probs)):
+        print(f"[DEBUG RENDERING] Rendering cake #{idx+1}: {cake} (score: {prob:.4f})")
         with rec_cols[idx]:
             # Get comprehensive metadata (no N/A values)
             card_data = format_cake_card(cake, confidence=prob, rank=roman_numerals[idx])
@@ -1745,132 +1640,68 @@ else:  # Store page
             })
             
             # ================================================================
-            # HYBRID RECOMMENDER SYSTEM INFERENCE
+            # ML PIPELINE INFERENCE (CLEAN, FAIL-FAST DESIGN)
             # 3-layer: Behavioral Segmentation → Classification → Ranking
             # ================================================================
             
             try:
-                # Check if hybrid system is available
-                if st.session_state.hybrid_recommender is not None:
-                    # Prepare user input for hybrid system
-                    hybrid_input = {
-                        'mood': mood,
-                        'weather_condition': st.session_state.weather_condition,
-                        'temperature_celsius': temperature_celsius,
-                        'humidity': humidity,
-                        'season': season,
-                        'air_quality_index': air_quality_index,
-                        'time_of_day': st.session_state.time_of_day,
-                        'sweetness_preference': sweetness_preference,
-                        'health_preference': health_preference,
-                        'trend_popularity_score': trend_popularity_score,
-                        'temperature_category': temperature_category,
-                        'comfort_index': comfort_index,
-                        'environmental_score': environmental_score
-                    }
-                    
-                    # Run hybrid inference (3-layer system)
-                    hybrid_results, cluster_id = st.session_state.hybrid_recommender.infer(hybrid_input)
-                    
-                    # Convert hybrid results to top-3 format for display compatibility
-                    # Sort results by final_score (rank)
-                    sorted_results = sorted(
-                        hybrid_results.items(),
-                        key=lambda x: x[1]['final_score'],
-                        reverse=True
-                    )
-                    
-                    top_3_cakes = [cake_name for cake_name, _ in sorted_results[:3]]
-                    top_3_scores = [result['final_score'] for _, result in sorted_results[:3]]
-                    
-                    # Create probabilities array for backward compatibility
-                    probabilities = np.zeros(len(CAKE_CLASSES))
-                    for cake_name, result in sorted_results:
-                        if cake_name in CAKE_CLASSES:
-                            idx = CAKE_CLASSES.index(cake_name)
-                            probabilities[idx] = result['final_score']
-                    
-                    prediction_source = "🤖 Hybrid 3-Layer (Segmentation→Classification→Ranking)"
-                    prediction_success = True
-                    
-                    # Debug output
-                    print(f"[UI] 🤖 Using hybrid recommendation system")
-                    print(f"[UI] Cluster assigned: {cluster_id}")
-                    print(f"[UI] Top 3 recommendations: {top_3_cakes}")
-                    print(f"[UI] Final scores: {top_3_scores}")
-                    
-                    # Store hybrid details in session for display
-                    st.session_state.hybrid_results = hybrid_results
-                    st.session_state.cluster_id = cluster_id
-                    
-                else:
-                    # Fallback to legacy ML/Rule-based if hybrid not available
-                    print(f"[UI] Hybrid system not available, falling back to legacy prediction")
-                    prediction_success = False
-                    
+                # Prepare user input for ML pipeline
+                pipeline_input = {
+                    'mood': mood,
+                    'weather_condition': st.session_state.weather_condition,
+                    'temperature_celsius': temperature_celsius,
+                    'humidity': humidity,
+                    'season': season,
+                    'air_quality_index': air_quality_index,
+                    'time_of_day': st.session_state.time_of_day,
+                    'sweetness_preference': sweetness_preference,
+                    'health_preference': health_preference,
+                    'trend_popularity_score': trend_popularity_score,
+                    'temperature_category': temperature_category,
+                    'comfort_index': comfort_index,
+                    'environmental_score': environmental_score
+                }
+                
+                # Call the single entry point (no fallbacks, fail-fast design)
+                result = run_pipeline(pipeline_input)
+                
+                # Extract results from structured output
+                top_3_cakes = result['top_3_cakes']
+                top_3_scores = result['top_3_scores']
+                cluster_id = result.get('cluster_id')
+                
+                # Create probabilities array for display compatibility
+                probabilities = np.zeros(len(CAKE_CLASSES))
+                for cake_name, score in zip(top_3_cakes, top_3_scores):
+                    if cake_name in CAKE_CLASSES:
+                        idx = CAKE_CLASSES.index(cake_name)
+                        probabilities[idx] = score
+                
+                prediction_source = "🤖 Hybrid 3-Layer (Segmentation→Classification→Ranking)"
+                
+                # Debug output
+                print(f"[UI] ✅ ML Pipeline executed successfully")
+                print(f"[UI] Cluster assigned: {cluster_id}")
+                print(f"[UI] Top 3 recommendations: {top_3_cakes}")
+                print(f"[UI] Final scores: {top_3_scores}")
+                
+                # Store pipeline results in session for display
+                st.session_state.pipeline_result = result
+                st.session_state.cluster_id = cluster_id
+                
             except Exception as e:
-                st.error(f"❌ Hybrid system error: {str(e)}")
-                print(f"[UI] Hybrid inference failed: {str(e)}")
-                prediction_success = False
+                # FAIL-FAST: Show error and stop execution (no fallback)
+                st.error(f"❌ ML Pipeline Error: {str(e)}")
+                print(f"[UI] ❌ ML Pipeline failed: {str(e)}")
+                st.stop()
             
-            # FALLBACK: If hybrid failed, use legacy ML → Rule-based
-            if not prediction_success:
-                probabilities = None
-                prediction_source = "UNKNOWN"
-                
-                # 🔥 STEP 1: TRY ML PREDICTIONS (V2 PREFERRED)
-                if (model is not None and preprocessor is not None and 
-                    MODEL_VERSION in ["V2_PRODUCTION", "V2_RETRAINED"]):
-                    try:
-                        # Preprocess input
-                        X_processed = preprocessor.transform(user_input)
-                        
-                        # Validate input shape
-                        expected_features = len(preprocessor.get_feature_names_out())
-                        if X_processed.shape[1] != expected_features:
-                            raise ValueError(
-                                f"Input shape mismatch: got {X_processed.shape[1]} features, "
-                                f"expected {expected_features}"
-                            )
-                        
-                        # Make ML prediction
-                        probabilities = model.predict_proba(X_processed)[0]
-                        prediction_success = True
-                        prediction_source = f"🧠 ML ({MODEL_VERSION})"
-                        
-                        # Debug output
-                        print(f"[UI] 🧠 Using ML predictions from {MODEL_VERSION}")
-                        print(f"[UI] Probabilities shape: {probabilities.shape}")
-                        print(f"[UI] Top 3 probs: {np.sort(probabilities)[-3:][::-1]}")
-                        
-                    except Exception as e:
-                        # ML prediction failed - will try rule-based
-                        print(f"[UI] ❌ ML prediction failed: {str(e)[:100]}")
-                        prediction_source = "RULE_BASED"
-                
-                # STEP 2: FALLBACK TO RULE-BASED IF ML UNAVAILABLE OR FAILED
-                if not prediction_success:
-                    try:
-                        probabilities = RuleBasedPredictor.predict_proba(
-                            mood=mood,
-                            weather=st.session_state.weather_condition
-                        )
-                        prediction_success = True
-                        prediction_source = "⚠️ Rule-Based"
-                        
-                        # Debug output
-                        print(f"[UI] Using rule-based recommendations")
-                        print(f"[UI] Rule-based probabilities shape: {probabilities.shape}")
-                        
-                    except Exception as e:
-                        st.error(f"❌ Prediction failed: {str(e)}")
-                        st.stop()
+            # 🔴 FIX: Use ACTUAL ML output, NOT recalculated from probabilities array
+            # ML has already ranked correctly - use results directly
+            print(f"[DEBUG UI] Using actual ML recommendations: {top_3_cakes}")
+            print(f"[DEBUG UI] Using actual ML scores: {top_3_scores}")
             
-            # Get top 3 recommendations (if not already set by hybrid)
-            if probabilities is not None:
-                top_3_indices = np.argsort(probabilities)[-3:][::-1]
-                top_3_cakes = [CAKE_CLASSES[i] for i in top_3_indices]
-                top_3_probs = [probabilities[i] for i in top_3_indices]
+            # Rename for consistency with rest of codebase
+            top_3_probs = top_3_scores
             
             # Save to session state
             st.session_state.ai_result = {
@@ -1880,7 +1711,7 @@ else:  # Store page
                 'mood': mood,
                 'weather_condition': st.session_state.weather_condition,
                 'time_of_day': st.session_state.time_of_day,
-                'model_version': MODEL_VERSION,
+                'model_version': ML_VERSION,
                 'prediction_source': prediction_source
             }
             st.session_state.has_generated = True

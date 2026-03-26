@@ -1,21 +1,23 @@
-## PRODUCTION-READY ML ARCHITECTURE
+## PRODUCTION-READY ML ARCHITECTURE - FAIL-FAST ONLY
 
-**Version:** 1.0.0  
+**Version:** 1.0.1 (Fallback Elimination Complete)  
 **Status:** 🟢 PRODUCTION READY  
-**Commit:** fb0ddf0  
-**Date:** March 22, 2026
+**Fallback Logic:** ❌ COMPLETELY REMOVED  
+**Error Handling:** ⚡ FAIL-FAST - Hard errors instead of silent fallback  
+**Date:** March 24, 2026
 
 ---
 
 ## 1. ARCHITECTURE OVERVIEW
 
-The Beige AI system now implements a production-grade ML architecture with three core safety layers:
+The Beige AI system implements a **FAIL-FAST ML architecture** with NO fallback logic.
+If the V2 model cannot be loaded, the app crashes immediately with a clear error message.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ STREAMLIT FRONTEND (frontend/beige_ai_app.py)           │
 │ - User input collection                                 │
-│ - Modal selection (V2 XGBoost or V1 RandomForest)      │
+│ - Cake recommendations (V2 XGBoost ONLY)               │
 │ - Results presentation                                  │
 └─────────────────────────────────────────────────────────┘
                             ↓
@@ -28,11 +30,12 @@ The Beige AI system now implements a production-grade ML architecture with three
 └─────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────┐
-│ LAYER 2: SAFE MODEL LOADING (backend/model_loader.py)  │
+│ LAYER 2: V2 MODEL LOADING (backend/model_loader.py)    │
 │ ✓ V2 primary model (XGBoost) with unified artifacts    │
-│ ✓ V1 fallback model (RandomForest) if V2 fails         │
+│ ✗ NO FALLBACK - Hard fails if V2 unavailable           │
 │ ✓ Version tracking and diagnostics                      │
 │ ✓ Preprocessor and label encoder extraction            │
+│ ✓ Clear RuntimeError if loading fails                   │
 └─────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────┐
@@ -42,20 +45,20 @@ The Beige AI system now implements a production-grade ML architecture with three
 │ ✓ Feature schema verification                           │
 │ ✓ Preprocessing safety checks                           │
 │ ✓ Prediction output validation                          │
-│ ✓ Clear error messages with recovery paths             │
+│ ✓ Explicit error messages (no hidden failures)         │
 └─────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────┐
-│ ML MODELS (models/)                                     │
-│ ✓ v2_final_model.pkl - Unified V2 (XGBoost 2.0.3)     │
+│ ML MODEL (models/)                                      │
+│ ✓ v2_final_model.pkl - Unified V2 ONLY (XGBoost 2.0.3)│
 │   ├─ model (XGBClassifier)                             │
 │   ├─ preprocessor (ColumnTransformer)                  │
 │   ├─ label_encoder (LabelEncoder)                      │
 │   ├─ feature_names (29 features)                       │
 │   └─ training_env (version metadata)                   │
 │                                                         │
-│ ✓ cake_model.joblib - V1 Fallback (RandomForest)      │
-│ ✓ preprocessor.joblib - V1 Preprocessor               │
+│ ✗ No fallback models (V1 removed)                      │
+│ ✗ No legacy preprocessors                              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -67,7 +70,7 @@ The Beige AI system now implements a production-grade ML architecture with three
 beige-ai/
 ├── backend/
 │   ├── feature_contract.py          # Feature schema contract (SINGLE SOURCE OF TRUTH)
-│   ├── model_loader.py              # Safe model loading with fallback
+│   ├── model_loader.py              # V2-only model loading (FAIL-FAST)
 │   ├── inference_pipeline.py        # Feature validation + inference safety
 │   ├── menu_config.py
 │   ├── data/
@@ -79,10 +82,8 @@ beige-ai/
 │   └── beige_ai_app.py              # Streamlit app (uses production modules)
 │
 ├── models/
-│   ├── v2_final_model.pkl           # 🟢 PRIMARY: Unified V2 (XGBoost)
-│   ├── v2_metadata.json             # V2 metadata + version info
-│   ├── cake_model.joblib            # 🟡 FALLBACK: V1 (RandomForest)
-│   └── preprocessor.joblib          # V1 preprocessor
+│   └── v2_final_model.pkl           # 🟢 PRIMARY: Unified V2 (XGBoost)
+│                                     │   (NO fallback alternatives)
 │
 ├── requirements.txt                 # 🔒 PINNED VERSIONS
 ├── runtime.txt
@@ -120,22 +121,23 @@ CATEGORICAL_VALUES = {
 
 ```python
 loader = ModelLoader(verbose=True)
-model, version = loader.load()  # Returns ("V2" or "V1")
+model, version = loader.load()  # Always returns "V2" or raises RuntimeError
 
 # Handles:
 ✓ V2 model loading (XGBoost + preprocessing bundled)
-✓ V2 model failure → V1 fallback (RandomForest)
+✗ NO FALLBACK - Fails hard if V2 cannot be loaded
 ✓ Preprocessor extraction from unified model
 ✓ Label encoder for class names
 ✓ Version tracking and diagnostics
-✓ Clear error messages
+✓ Clear RuntimeError if loading fails
 ```
 
 **Key Properties:**
-- Deterministic fallback (V2→V1, no randomness)
-- Version-aware logging
+- Fail-fast design (no silent fallback)
+- Explicit error messages with context
 - Works on Streamlit Cloud (relative paths)
 - Singleton pattern for efficiency
+- **Zero tolerance for model unavailability**
 
 ### 3.3 Inference Pipeline Validation
 
@@ -156,10 +158,11 @@ probabilities, debug_info = pipeline.predict_proba_safe(input_dict)
 ```
 
 **Error Handling:**
+- Explicit RuntimeError for all failures
 - Clear error messages at every stage
 - Debug information for troubleshooting
 - Stops before prediction if validation fails
-- Allows graceful degradation
+- NO silent fallback behavior
 
 ---
 
@@ -172,7 +175,7 @@ streamlit>=1.28.0
 pandas>=2.0.0,<3.0.0
 numpy>=1.24.0,<2.0.0
 scikit-learn==1.5.1              # 🔒 EXACT PIN (model trained with this)
-xgboost>=2.0.0                   # 🟢 ADD (required for V2 model unpickling)
+xgboost>=2.0.0                   # 🟢 REQUIRED (for V2 model unpickling)
 joblib>=1.3.0
 pillow>=9.0.0
 matplotlib>=3.5.0
@@ -180,10 +183,11 @@ google-generativeai>=0.3.0
 ```
 
 **What Changed:**
-- ✅ Added `xgboost` (was missing, causing V2 load failures)
+- ✅ Added `xgboost` (required for V2 model)
 - ✅ Pinned `scikit-learn==1.5.1` (V2 trained with this exact version)
 - ✅ Added version ranges for `numpy` and `pandas`
 - ✅ Added minimum versions for all packages
+- ✅ Removed all V1 fallback dependencies
 
 **Why This Matters:**
 - V2 model pickled with sklearn 1.5.1 tree structure
@@ -246,18 +250,18 @@ Top-K Results:
 ```
 VERSIONING
   ✅ scikit-learn==1.5.1 pinned (matches training)
-  ✅ xgboost present in requirements.txt
+  ✅ xgboost present in requirements.txt (required for V2)
   ✅ numpy>=1.24.0,<2.0.0 pinned (prevents 2.x breaking changes)
   ✅ pandas>=2.0.0,<3.0.0 pinned
   ✅ All package versions in requirements.txt
 
 MODEL ARTIFACTS
-  ✅ v2_final_model.pkl exists (3.2 MB)
+  ✅ v2_final_model.pkl ONLY (3.2 MB)
     ├─ Contains: model + preprocessor + encoder
     ├─ Tested: unpickles without errors
     └─ Versions: locked in metadata
-  ✅ cake_model.joblib exists (4.0 MB) - V1 fallback
-  ✅ preprocessor.joblib exists (1.9 KB) - V1 fallback
+  ✗ V1 fallback models removed (no cake_model.joblib)
+  ✗ V1 preprocessor removed (no preprocessor.joblib)
 
 FEATURE SCHEMA
   ✅ feature_contract.py defines 13 input features
@@ -267,10 +271,12 @@ FEATURE SCHEMA
   ✅ All validation functions present
 
 SAFE LOADING
-  ✅ model_loader.py: V2→V1 fallback implemented
+  ✅ model_loader.py: V2-ONLY (NO FALLBACK)
+  ✅ Hard fails if V2 cannot be loaded
   ✅ No hard-coded absolute paths (uses Path.resolve())
   ✅ Relative paths from package root
   ✅ Version tracking in metadata
+  ✅ Clear RuntimeError on any ML system failure
 
 INFERENCE VALIDATION
   ✅ inference_pipeline.py: All validation checks present
@@ -278,7 +284,7 @@ INFERENCE VALIDATION
   ✅ DataFrame schema validation
   ✅ Preprocessing output validation
   ✅ Prediction output validation
-  ✅ Error handling with clear messages
+  ✅ Error handling with explicit exceptions (no fallback)
 
 FRONTEND INTEGRATION
   ✅ frontend/beige_ai_app.py imports production modules
@@ -291,11 +297,12 @@ STREAMLIT SAFETY
   ✅ Relative paths (no /Users/... hardcoding)
   ✅ Model loading at module level (executes once)
   ✅ Caching prevents reloading on reruns
-  ✅ Try/except with clear error messages
+  ✅ Clear error messages if loading fails
+  ✅ No silent fallback behavior
 
 ═════════════════════════════════════════════════════════
 
-OVERALL STATUS: 🟢 PRODUCTION READY FOR DEPLOYMENT
+OVERALL STATUS: 🟢 PRODUCTION READY FOR DEPLOYMENT (FAIL-FAST)
 ```
 
 ---
@@ -316,7 +323,7 @@ OVERALL STATUS: 🟢 PRODUCTION READY FOR DEPLOYMENT
 ### 7.3 Safety on Restart
 - ✅ Streamlit Cloud restart → App reloads models
 - ✅ Feature contract prevents input misalignment
-- ✅ Fallback to V1 if V2 load fails
+- ✗ NO fallback - Fails explicitly if V2 unavailable
 - ✅ Clear error messages guide troubleshooting
 
 ### 7.4 Safety on Redeploy

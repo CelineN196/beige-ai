@@ -26,6 +26,7 @@ venv/
 ENV/
 env/
 .env
+.env.local
 
 # IDEs
 .vscode/
@@ -40,6 +41,13 @@ env/
 .streamlit/cache/
 .streamlit/*.cache
 
+# Archive & Migration (Development files)
+tests/migration_archive/
+docs/migration_logs/
+archive/
+*.old
+*.deprecated
+
 # Database files (keep CSV for ML logging)
 data/*.db
 
@@ -48,6 +56,43 @@ data/*.db
 *.ipynb
 
 # Testing
+.pytest_cache/
+.coverage
+*.coverage
+
+# Logs
+*.log
+*.logs
+
+# Temporary files
+*.tmp
+*.bak
+tempsessiondata
+
+# OS Files
+Thumbs.db
+ehthumbs.db
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+
+# Secrets & Credentials
+secrets.json
+credentials.json
+api_keys.txt
+*.pem
+*.key
+*.crt
+
+# Generated/Temporary Directories
+.cache/
+cache/
+temp/
+tmp/
+output/
+results/
 .pytest_cache/
 .coverage
 htmlcov/
@@ -68,3 +113,6 @@ Thumbs.db
 !models/v2*.pkl
 !models/v2*.json
 *.log
+
+# Archive directories (historical files)
+archive/
