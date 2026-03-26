@@ -13,13 +13,27 @@ Features:
 """
 
 # ============================================================================
+# � DEBUG MODE TOGGLE - SET TO False FOR PRODUCTION (MUST BE FIRST)
+# ============================================================================
+# Initialize debug mode and logging BEFORE any other prints
+import os
+import sys
+import logging
+
+DEBUG = False  # Set to True to show debug output in UI
+
+# Keep backend logging for terminal (development) - these don't expose in UI
+logger = logging.getLogger("Beige AI")
+logger.setLevel(logging.INFO if not DEBUG else logging.DEBUG)
+
+# ============================================================================
 # 🚀 ENTRY POINT ENFORCEMENT - SINGLE FRONTEND ENTRY
 # ============================================================================
 # This file MUST be the ONLY Streamlit entry point. Fail immediately if not.
-print("🚀 RUNNING MAIN FRONTEND: beige_ai_app.py")
-print("✅ Frontend: Single entry point verified")
-print("✅ CLEAN FRONTEND ENTRY — beige_ai_app.py (Modular Architecture)")
-import os
+if DEBUG:
+    logger.info("🚀 RUNNING MAIN FRONTEND: beige_ai_app.py")
+    logger.info("✅ Frontend: Single entry point verified")
+    logger.info("✅ CLEAN FRONTEND ENTRY — beige_ai_app.py (Modular Architecture)")
 current_file = os.path.basename(__file__)
 assert current_file == "beige_ai_app.py", f"❌ WRONG ENTRY FILE: {current_file}. Must run: streamlit run frontend/beige_ai_app.py"
 
@@ -27,7 +41,6 @@ assert current_file == "beige_ai_app.py", f"❌ WRONG ENTRY FILE: {current_file}
 # 🔧 FIX PYTHON IMPORT PATH FOR MODULAR ARCHITECTURE
 # ============================================================================
 # Add project root to sys.path so we can import from core/
-import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import streamlit as st
@@ -48,24 +61,23 @@ import csv
 # But we still need _BASE_DIR for other file operations
 _BASE_DIR = Path(__file__).resolve().parent.parent
 
-# =====================================================================
-# 🔍 DEBUG: DIRECTORY & MODEL PATH DIAGNOSTICS
-# =====================================================================
-_DEBUG_ENABLED = True  # Set to False to hide debug output
-
-if _DEBUG_ENABLED:
+# Only show directory/model diagnostics if DEBUG is enabled
+if DEBUG:
     st.write("🔍 **DEBUG: Environment & Model Loading Diagnostics**")
     
     # Show base directory
     st.write(f"📁 Base directory: `{_BASE_DIR}`")
+    logger.debug(f"Base directory: {_BASE_DIR}")
     
     # List root directory files
     try:
         root_files = os.listdir(_BASE_DIR)
         st.write(f"📂 Root files count: {len(root_files)}")
         st.write(f"   Files: {', '.join(sorted(root_files)[:10])}...")
+        logger.debug(f"Root files: {root_files}")
     except Exception as e:
         st.error(f"❌ Cannot list root files: {e}")
+        logger.error(f"Cannot list root files: {e}")
     
     # Check models directory
     models_dir = _BASE_DIR / "models"
@@ -76,10 +88,13 @@ if _DEBUG_ENABLED:
         try:
             model_files = os.listdir(models_dir)
             st.write(f"   📦 Contents ({len(model_files)} files): {', '.join(sorted(model_files))}")
+            logger.debug(f"Model files: {model_files}")
         except Exception as e:
             st.error(f"   ❌ Cannot list models: {e}")
+            logger.error(f"Cannot list models: {e}")
     else:
         st.error("   ❌ Models directory does NOT exist!")
+        logger.warning("Models directory does not exist!")
     
     # Check specific model.pkl
     model_pkl_path = models_dir / "model.pkl"
@@ -91,8 +106,10 @@ if _DEBUG_ENABLED:
         try:
             file_size_mb = model_pkl_path.stat().st_size / (1024 * 1024)
             st.write(f"   Size: {file_size_mb:.2f} MB")
+            logger.debug(f"Model file size: {file_size_mb:.2f} MB")
         except Exception as e:
             st.error(f"   ❌ Cannot get file size: {e}")
+            logger.error(f"Cannot get file size: {e}")
     
     st.write("---")
 
@@ -332,7 +349,8 @@ def fetch_weather_data(city="Da Nang, Vietnam"):
 # Import the new clean ML pipeline
 from core.ml_engine.ml_pipeline import run_pipeline
 
-print("✅ ML Pipeline imported successfully")
+if DEBUG:
+    logger.info("✅ ML Pipeline imported successfully")
 
 # ============================================================================
 # CAKE CLASSES & ML STATUS
@@ -365,8 +383,9 @@ ML_VERSION = "3-Layer Hybrid (Segmentation→Classification→Ranking)"
 MODE = "ML_PIPELINE"
 CAKE_CLASSES = get_cake_classes()
 
-print("🚀 MODEL LOADED SUCCESSFULLY")
-print("🚀 RUNNING REAL ML PIPELINE")
+if DEBUG:
+    logger.info("🚀 MODEL LOADED SUCCESSFULLY")
+    logger.info("🚀 RUNNING REAL ML PIPELINE")
 
 # ============================================================================
 # VERSION DIAGNOSTICS & STATUS DISPLAY
@@ -703,15 +722,17 @@ def save_order_data(order_id, items_purchased, ai_recommendation, result):
                 timestamp
             ])
         
-        print(f"✅ Order logged successfully: {order_id}")
+        if DEBUG:
+            logger.info(f"✅ Order logged successfully: {order_id}")
         return True, None
         
     except Exception as e:
         error_msg = f"Order logging failed: {str(e)}"
-        print(f"❌ {error_msg}")
-        print(f"   Order ID: {order_id}")
-        import traceback
-        traceback.print_exc()
+        if DEBUG:
+            logger.error(f"❌ {error_msg}")
+            logger.error(f"   Order ID: {order_id}")
+            import traceback
+            traceback.print_exc()
         return False, error_msg
 
 
@@ -994,17 +1015,19 @@ def display_ai_recommendations():
     """, unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # 🔍 TEMPORARY DEBUG: Show raw ML output
-    with st.expander("🔍 DEBUG: Raw ML Output (Will Remove Later)"):
-        st.write(f"**Top 3 ML Recommendations (Actual):**")
-        for i, (cake, score) in enumerate(zip(top_3_cakes, top_3_probs), 1):
-            st.write(f"  {i}. {cake} (Score: {score:.4f})")
-        st.json({
-            "top_3_cakes": top_3_cakes,
-            "top_3_scores": top_3_probs,
-            "model_version": model_version,
-            "prediction_source": prediction_source
-        })
+    # 🔍 DEBUG SECTION: Show raw ML output (only if DEBUG mode)
+    if DEBUG:
+        with st.expander("🔍 DEBUG: Raw ML Output"):
+            st.write(f"**Top 3 ML Recommendations (Actual):**")
+            for i, (cake, score) in enumerate(zip(top_3_cakes, top_3_probs), 1):
+                st.write(f"  {i}. {cake} (Score: {score:.4f})")
+            st.json({
+                "top_3_cakes": top_3_cakes,
+                "top_3_scores": top_3_probs,
+                "model_version": model_version,
+                "prediction_source": prediction_source
+            })
+            logger.debug(f"ML Output: {top_3_cakes} with scores {top_3_probs}")
     
     # Display micro-story first (the emotional narrative)
     if st.session_state.micro_story:
@@ -1045,16 +1068,17 @@ def display_ai_recommendations():
     # 🔴 CRITICAL FIX: Get ACTUAL current time (not cached/session state)
     current_time_period, current_hour, time_debug = get_current_time()
     
-    # Debug logging for time detection
-    st.caption(f"🕐 **System Time**: {time_debug} (Using live system time, not cached)")
+    # Debug logging for time detection (only show in DEBUG mode)
+    if DEBUG:
+        st.caption(f"🕐 **System Time**: {time_debug} (Using live system time, not cached)")
+    logger.debug(f"Current time period: {current_time_period}, debug: {time_debug}")
     
-    # 🔍 DEBUG: Verify we're rendering actual ML cakes
-    print(f"[DEBUG RENDERING] Starting to render {len(top_3_cakes)} recommendations:")
-    for idx, cake in enumerate(top_3_cakes, 1):
-        print(f"  {idx}. {cake}")
+    # Log rendering start (terminal only, not UI)
+    logger.debug(f"Starting to render {len(top_3_cakes)} recommendations: {top_3_cakes}")
     
     for idx, (cake, prob) in enumerate(zip(top_3_cakes, top_3_probs)):
-        print(f"[DEBUG RENDERING] Rendering cake #{idx+1}: {cake} (score: {prob:.4f})")
+        if DEBUG:
+            logger.debug(f"Rendering cake #{idx+1}: {cake} (score: {prob:.4f})")
         with rec_cols[idx]:
             # Get comprehensive metadata (no N/A values)
             card_data = format_cake_card(cake, confidence=prob, rank=roman_numerals[idx])
@@ -1680,10 +1704,11 @@ else:  # Store page
                 prediction_source = "🤖 Hybrid 3-Layer (Segmentation→Classification→Ranking)"
                 
                 # Debug output
-                print(f"[UI] ✅ ML Pipeline executed successfully")
-                print(f"[UI] Cluster assigned: {cluster_id}")
-                print(f"[UI] Top 3 recommendations: {top_3_cakes}")
-                print(f"[UI] Final scores: {top_3_scores}")
+                if DEBUG:
+                    logger.debug(f"✅ ML Pipeline executed successfully")
+                    logger.debug(f"Cluster assigned: {cluster_id}")
+                    logger.debug(f"Top 3 recommendations: {top_3_cakes}")
+                    logger.debug(f"Final scores: {top_3_scores}")
                 
                 # Store pipeline results in session for display
                 st.session_state.pipeline_result = result
@@ -1692,13 +1717,15 @@ else:  # Store page
             except Exception as e:
                 # FAIL-FAST: Show error and stop execution (no fallback)
                 st.error(f"❌ ML Pipeline Error: {str(e)}")
-                print(f"[UI] ❌ ML Pipeline failed: {str(e)}")
+                if DEBUG:
+                    logger.debug(f"❌ ML Pipeline failed: {str(e)}")
                 st.stop()
             
             # 🔴 FIX: Use ACTUAL ML output, NOT recalculated from probabilities array
             # ML has already ranked correctly - use results directly
-            print(f"[DEBUG UI] Using actual ML recommendations: {top_3_cakes}")
-            print(f"[DEBUG UI] Using actual ML scores: {top_3_scores}")
+            if DEBUG:
+                logger.debug(f"Using actual ML recommendations: {top_3_cakes}")
+                logger.debug(f"Using actual ML scores: {top_3_scores}")
             
             # Rename for consistency with rest of codebase
             top_3_probs = top_3_scores
