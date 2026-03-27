@@ -297,10 +297,6 @@ def explain_recommendation(
     else:
         actual_time_period = 'night'
     
-    # DEBUG: Log detected vs expected time
-    if debug:
-        # Time period validation (silent mode)
-    
     # Use ACTUAL time, not session state
     time_period = actual_time_period
     
@@ -465,4 +461,4 @@ def validate_metadata() -> tuple:
 # Validate on import
 _is_valid, _missing = validate_metadata()
 if not _is_valid:
-    # Validation check (silent mode)
+    pass  # Validation check (silent mode)

@@ -497,8 +497,8 @@ class HybridRecommendationSystem:
         )
         
         # Process results (silent mode)
-        
         results = {}
+        for idx, cake_result in enumerate(ranked_cakes):
             results[cake_result['cake_name']] = {
                 'rank': idx + 1,
                 'final_score': cake_result['final_score'],
@@ -618,5 +618,6 @@ def create_or_load_system(train_if_missing=True):
         print("[INIT] Training new hybrid system...")
         system.save()
     else:
+        pass
     
     return system
