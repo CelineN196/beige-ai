@@ -475,6 +475,8 @@ class HybridRecommendationSystem:
         # Layer 3: Ranking
         self.ranker.fit_cluster_stats(df)
         
+        # Mark system as trained
+        self.is_trained = True
         
         return self
     
@@ -505,6 +507,7 @@ class HybridRecommendationSystem:
         
         # Get ranked cakes
         ranked_cakes = self.ranker.rank_cakes(
+            ml_probs=ml_probs,
             trend_popularity=user_input.get('trend_popularity_score', 0.5),
             health_preference=user_input.get('health_preference', 5),
             cluster_id=int(cluster_id)
