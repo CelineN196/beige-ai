@@ -111,7 +111,7 @@ class MLPipeline:
             
             # Stage 2: Run inference
             try:
-                hybrid_results, cluster_id = self.system.infer(input_data)
+                hybrid_results, cluster_id = self.system.predict(input_data)
             except Exception as e:
                 raise PipelineError(f"Inference failed: {str(e)}")
             

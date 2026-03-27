@@ -478,6 +478,7 @@ class HybridRecommendationSystem:
         
         return self
     
+    def predict(self, user_input):
         """
         Complete inference pipeline.
         
