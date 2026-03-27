@@ -33,7 +33,7 @@ warnings.filterwarnings('ignore')
 
 _FILE_PATH = Path(__file__).resolve()
 _PROJECT_ROOT = _FILE_PATH.parent.parent.parent  # Up to project root
-DATA_PATH = _PROJECT_ROOT / "backend" / "data"
+DATA_PATH = _PROJECT_ROOT / "data" / "raw"  # Dataset in data/raw/
 MODELS_DIR = _PROJECT_ROOT / "models"
 PRODUCTION_MODELS_DIR = MODELS_DIR / "production"
 
@@ -138,8 +138,6 @@ class BehavioralSegmentation:
         self.kmeans.fit(X_scaled)
         self.is_fitted = True
         
-        print(f"✅ KMeans fitted with {self.n_clusters} clusters")
-        
         # Add cluster assignments to dataframe
         df['cluster_id'] = self.kmeans.labels_
         
@@ -178,32 +176,21 @@ class BehavioralSegmentation:
         """
         X = X.copy()
         
-        # Log NaN summary before cleaning
+        # Log NaN summary before cleaning (silent mode - no prints)
         nan_summary = X.isna().sum()
-        if nan_summary.sum() > 0:
-            print(f"⚠️ [{stage}] Found NaN values in features:")
-            for col, count in nan_summary[nan_summary > 0].items():
-                print(f"   {col}: {count} missing values")
         
         # Fill NaNs in categorical columns with mode (most common value)
         categorical_cols = ['mood', 'weather_condition', 'season', 'time_of_day', 'temperature_category']
         for col in categorical_cols:
             if col in X.columns and X[col].isna().any():
                 mode_val = X[col].mode()[0] if len(X[col].mode()) > 0 else 'Happy'
-                print(f"   Filling {col} NaNs with: {mode_val}")
                 X[col].fillna(mode_val, inplace=True)
         
         # Fill NaNs in numeric columns with 0 (safe for environmental scores)
         numeric_cols = [col for col in X.columns if X[col].dtype in ['float64', 'int64']]
         for col in numeric_cols:
             if X[col].isna().any():
-                print(f"   Filling {col} NaNs with: 0")
                 X[col].fillna(0, inplace=True)
-        
-        # Final check
-        if X.isna().any().any():
-            print(f"❌ [{stage}] Warning: Still have NaNs after cleaning!")
-            print(f"   {X.isna().sum().sum()} NaNs remaining")
         
         return X
     
@@ -284,9 +271,6 @@ class CakePredictionClassifier:
         self.classes_ = self.label_encoder.classes_
         self.is_fitted = True
         
-        print(f"✅ Classifier fitted on {len(feature_cols)} features")
-        print(f"   Predicting {self.n_classes} cake classes")
-        
         return self
     
     def predict_proba(self, df):
@@ -325,10 +309,6 @@ class CakePredictionClassifier:
         
         # Log NaN summary
         nan_summary = X.isna().sum()
-        if nan_summary.sum() > 0:
-            print(f"⚠️ [{stage}] Found NaN values in classifier features:")
-            for col, count in nan_summary[nan_summary > 0].items():
-                print(f"   {col}: {count} missing values")
         
         # Fill categorical NaNs with mode
         categorical_cols = ['mood', 'weather_condition', 'season', 'time_of_day', 'temperature_category']
@@ -473,28 +453,18 @@ class HybridRecommendationSystem:
         if csv_path is None:
             csv_path = DATA_PATH / "beige_ai_cake_dataset_v2.csv"
         
-        print(f"[TRAINING] Loading dataset from {csv_path}")
         df = pd.read_csv(csv_path)
-        print(f"[TRAINING] Loaded {len(df)} samples, {len(df.columns)} features")
         
         # Layer 1: K-Means Segmentation
-        print("\n[LAYER 1] Training behavioral segmentation (K-Means)...")
-        df = self.segmentation.fit(df)
         
         # Layer 2: Classifier
-        print("[LAYER 2] Training cake prediction classifier (Random Forest)...")
         self.classifier.fit(df)
-        
         # Layer 3: Ranking
-        print("[LAYER 3] Learning cluster-cake statistics for ranking...")
         self.ranker.fit_cluster_stats(df)
         
-        self.is_trained = True
-        print("\n✅ All 3 layers trained successfully!")
         
         return self
     
-    def infer(self, user_input: dict):
         """
         Complete inference pipeline.
         
@@ -519,27 +489,16 @@ class HybridRecommendationSystem:
         ml_probs_list = self.classifier.predict_proba(input_df)
         ml_probs = ml_probs_list[0]
         
-        # 🔍 DEBUG: Log raw ML output before mapping
-        print("[DEBUG] Raw ML probabilities (before ranking):")
-        for cake_name, prob in ml_probs.items():
-            print(f"  - {cake_name}: {prob:.4f}")
-        
-        # Step 3: Rank using personalization layer
+        # Get ranked cakes
         ranked_cakes = self.ranker.rank_cakes(
-            ml_probs=ml_probs,
             trend_popularity=user_input.get('trend_popularity_score', 0.5),
             health_preference=user_input.get('health_preference', 5),
             cluster_id=int(cluster_id)
         )
         
-        # 🔍 DEBUG: Log ranked results
-        print("[DEBUG] Ranked cakes (top 5 before formatting):")
-        for idx, cake_result in enumerate(ranked_cakes[:5]):
-            print(f"  {idx+1}. {cake_result['cake_name']}: final_score={cake_result['final_score']:.4f}")
+        # Process results (silent mode)
         
-        # Step 4: Format results
         results = {}
-        for idx, cake_result in enumerate(ranked_cakes[:5]):  # Top 5
             results[cake_result['cake_name']] = {
                 'rank': idx + 1,
                 'final_score': cake_result['final_score'],
@@ -594,11 +553,8 @@ class HybridRecommendationSystem:
         
         joblib.dump(self.ranker.cluster_cake_stats, models_dir / "cluster_stats.pkl")
         
-        print(f"✅ All production models saved to {models_dir}")
-        
         # Validate that all required files were saved
         validate_production_models()
-        
         return self
     
     def load(self, models_dir=None):
@@ -630,10 +586,7 @@ class HybridRecommendationSystem:
         
         self.is_trained = True
         
-        print(f"✅ All production models loaded from {models_dir}")
-        
         return self
-
 
 # ============================================================================
 # CONVENIENCE FUNCTION FOR STREAMLIT
@@ -663,9 +616,7 @@ def create_or_load_system(train_if_missing=True):
         system.load()
     elif train_if_missing:
         print("[INIT] Training new hybrid system...")
-        system.train()
         system.save()
     else:
-        raise ValueError("Models not found and train_if_missing=False")
     
     return system

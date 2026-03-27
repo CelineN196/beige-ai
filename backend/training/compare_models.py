@@ -40,7 +40,7 @@ warnings.filterwarnings('ignore')
 # ============================================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = BASE_DIR / "backend" / "data"
+DATA_DIR = BASE_DIR / "data" / "raw"  # Dataset in data/raw/
 MODELS_DIR = BASE_DIR / "backend" / "models"
 DOCS_DIR = BASE_DIR / "docs"
 

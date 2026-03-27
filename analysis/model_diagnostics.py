@@ -41,7 +41,7 @@ warnings.filterwarnings('ignore')
 # ============================================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "backend" / "data"
+DATA_DIR = BASE_DIR / "data" / "raw"  # Dataset in data/raw/
 MODELS_DIR = BASE_DIR / "models"
 
 DATASET_PATH = DATA_DIR / "beige_ai_cake_dataset_v2.csv"

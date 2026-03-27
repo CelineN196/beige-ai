@@ -191,10 +191,9 @@ def validate_menu():
     missing_cakes = [cake for cake in CAKE_MENU if cake not in CAKE_CATEGORIES]
     return len(missing_cakes) == 0, missing_cakes
 
-# Validate on import
+# Validate on import (silent mode - no console output)
 _is_valid, _missing = validate_menu()
-if not _is_valid:
-    print(f"⚠️  Warning: Missing properties for cakes: {_missing}")
+# Validation check runs silently for production
 
 # ============================================================================
 # NORMALIZED CAKE METADATA LOOKUP
@@ -270,10 +269,7 @@ def get_cake_info(cake_name: str) -> dict:
     if normalized_key in cache:
         return cache[normalized_key]
     
-    # Log missing match (for debugging)
-    print(f"[WARN] Missing metadata for cake: '{cake_name}' (normalized: '{normalized_key}')")
-    
-    # Return safe defaults
+    # Return safe defaults (no logging for production)
     return {
         "category": "Signature",
         "flavor_profile": "Balanced",

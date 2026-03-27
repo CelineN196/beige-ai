@@ -101,14 +101,14 @@ class WorkspaceCleaner:
         return True
     
     def move_data_files(self):
-        """Move dataset CSV files to backend/data."""
-        self.print_step(2, "Moving Data Files → backend/data/")
+        """Move dataset CSV files to data/raw/."""
+        self.print_step(2, "Moving Data Files → data/raw/")
         
         data_files = {
-            "beige_ai_cake_dataset_v2.csv": "backend/data/beige_ai_cake_dataset_v2.csv",
-            "beige_ai_cake_dataset.csv": "backend/data/beige_ai_cake_dataset.csv",
-            "cluster_profiles.csv": "backend/data/cluster_profiles.csv",
-            "beige_customer_clusters.csv": "backend/data/beige_customer_clusters.csv",
+            "beige_ai_cake_dataset_v2.csv": "data/raw/beige_ai_cake_dataset_v2.csv",
+            "beige_ai_cake_dataset.csv": "data/raw/beige_ai_cake_dataset.csv",
+            "cluster_profiles.csv": "data/raw/cluster_profiles.csv",
+            "beige_customer_clusters.csv": "data/raw/beige_customer_clusters.csv",
             "association_rules.csv": "backend/association_rules.csv",
         }
         

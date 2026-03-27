@@ -60,7 +60,7 @@ RANDOM_STATE = 42
 np.random.seed(RANDOM_STATE)
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "backend" / "data"  # Dataset is in backend/data
+DATA_DIR = BASE_DIR / "data" / "raw"  # Dataset moved to data/raw/
 MODELS_DIR = BASE_DIR / "models"
 
 # Create models directory

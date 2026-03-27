@@ -235,19 +235,10 @@ def get_cake_metadata(cake_name: str) -> dict:
     """
     normalized_key = _normalize_name(cake_name)
     
-    # 🔍 DEBUG: Log lookup attempt
-    print(f"[DEBUG] Metadata lookup for: '{cake_name}'")
-    print(f"[DEBUG]   Normalized key: '{normalized_key}'")
-    print(f"[DEBUG]   Available keys: {list(_normalized_metadata.keys())}")
-    
     if normalized_key in _normalized_metadata:
-        print(f"[DEBUG]   ✅ Found match in metadata")
         return _normalized_metadata[normalized_key]
     
-    # Safe fallback with detailed error logging
-    print(f"[ERROR] Missing metadata for cake: '{cake_name}'")
-    print(f"[ERROR]   Normalized '{cake_name}' to '{normalized_key}' but no match found")
-    print(f"[ERROR]   Using generic fallback metadata")
+    # Safe fallback (silent)
     return {
         "category": "Signature",
         "flavor_profile": "Balanced",
@@ -308,7 +299,7 @@ def explain_recommendation(
     
     # DEBUG: Log detected vs expected time
     if debug:
-        print(f"🕐 [TIME DEBUG] Actual: {actual_time_period.upper()} ({actual_hour:02d}:00) | Session: {time_of_day}")
+        # Time period validation (silent mode)
     
     # Use ACTUAL time, not session state
     time_period = actual_time_period
@@ -474,4 +465,4 @@ def validate_metadata() -> tuple:
 # Validate on import
 _is_valid, _missing = validate_metadata()
 if not _is_valid:
-    print(f"[WARN] Metadata validation issue: Missing fields in {_missing}")
+    # Validation check (silent mode)

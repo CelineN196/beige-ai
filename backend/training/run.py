@@ -66,7 +66,7 @@ def check_data_files():
     
     # Dynamically locate dataset using pathlib
     base_dir = Path(__file__).resolve().parents[2]  # Root: Beige AI/
-    dataset_file = base_dir / "backend" / "data" / "beige_ai_cake_dataset_v2.csv"
+    dataset_file = base_dir / "data" / "raw" / "beige_ai_cake_dataset_v2.csv"
     
     print(f"   [INFO] Looking for dataset at: {dataset_file}")
     

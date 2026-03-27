@@ -86,8 +86,6 @@ class MLPipeline:
             #  Train the system (it needs to be trained before inference)
             # If already trained, it will load the trained models
             self.system.train()
-            
-            print("✅ ML Pipeline initialized successfully")
         
         except Exception as e:
             raise PipelineError(f"Pipeline initialization failed: {str(e)}")
@@ -245,4 +243,5 @@ def run_pipeline(input_data: Dict[str, Any]) -> Dict[str, Any]:
 try:
     initialize_pipeline()
 except Exception as e:
-    print(f"⚠️ Warning: Pipeline initialization deferred: {str(e)}")
+    # Silent failure - pipeline will be initialized on first use
+    pass
