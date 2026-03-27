@@ -247,9 +247,13 @@ class CakePredictionClassifier:
     
     def fit(self, df):
         """Train classifier on full feature set including cluster_id."""
-        # Ensure cluster_id is present
+        # Defensive validation: ensure cluster_id is present
         if 'cluster_id' not in df.columns:
-            raise ValueError("cluster_id must be in dataframe. Run BehavioralSegmentation first.")
+            raise ValueError(
+                f"cluster_id missing from dataframe. "
+                f"Available columns: {df.columns.tolist()}. "
+                f"BehavioralSegmentation.fit() must be called first to add cluster_id."
+            )
         
         # Prepare features
         feature_cols = INPUT_FEATURES + ['cluster_id']
@@ -277,6 +281,14 @@ class CakePredictionClassifier:
         """Return probability distribution over all cakes."""
         if not self.is_fitted:
             raise ValueError("Classifier not fitted. Call fit() first.")
+        
+        # Defensive validation
+        if 'cluster_id' not in df.columns:
+            raise ValueError(
+                f"cluster_id missing from dataframe. "
+                f"Available columns: {df.columns.tolist()}. "
+                f"Segmentation.predict() must be called first to assign cluster_id."
+            )
         
         feature_cols = INPUT_FEATURES + ['cluster_id']
         X = df[feature_cols].copy()
@@ -456,6 +468,7 @@ class HybridRecommendationSystem:
         df = pd.read_csv(csv_path)
         
         # Layer 1: K-Means Segmentation
+        df = self.segmentation.fit(df)
         
         # Layer 2: Classifier
         self.classifier.fit(df)
