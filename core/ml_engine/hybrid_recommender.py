@@ -15,6 +15,7 @@ import numpy as np
 from pathlib import Path
 import pickle
 import warnings
+import logging
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.cluster import KMeans
@@ -23,6 +24,11 @@ from sklearn.model_selection import train_test_split
 import joblib
 
 warnings.filterwarnings('ignore')
+
+# ============================================================================
+# LOGGING SETUP
+# ============================================================================
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # CONFIGURATION
@@ -491,46 +497,87 @@ class HybridRecommendationSystem:
         Returns:
             List of top-5 recommendations with scores and explanations
         """
+        logger.info("=" * 80)
+        logger.info("STARTING 3-LAYER HYBRID INFERENCE PIPELINE")
+        logger.info("=" * 80)
+        
         if not self.is_trained:
+            logger.error("System not trained. Call train() first.")
             raise ValueError("System not trained. Call train() first.")
         
-        # Create single-row dataframe for inference
-        input_df = pd.DataFrame([user_input])
-        
-        # Step 1: Assign cluster
-        cluster_id = self.segmentation.predict(input_df)[0]
-        input_df['cluster_id'] = cluster_id
-        
-        # Step 2: Get ML probabilities
-        ml_probs_list = self.classifier.predict_proba(input_df)
-        ml_probs = ml_probs_list[0]
-        
-        # Get ranked cakes
-        ranked_cakes = self.ranker.rank_cakes(
-            ml_probs=ml_probs,
-            trend_popularity=user_input.get('trend_popularity_score', 0.5),
-            health_preference=user_input.get('health_preference', 5),
-            cluster_id=int(cluster_id)
-        )
-        
-        # Process results (silent mode)
-        results = {}
-        for idx, cake_result in enumerate(ranked_cakes):
-            results[cake_result['cake_name']] = {
-                'rank': idx + 1,
-                'final_score': cake_result['final_score'],
-                'ml_probability': cake_result['ml_prob'],
-                'health_alignment': cake_result['health_alignment'],
-                'cluster_affinity': cake_result['cluster_affinity'],
-                'cluster_id': int(cluster_id),
-                'explanation': self._generate_explanation(
-                    cake_result,
-                    user_input,
-                    cluster_id
+        try:
+            # Create single-row dataframe for inference
+            input_df = pd.DataFrame([user_input])
+            logger.debug(f"Input dataframe created: shape {input_df.shape}")
+            
+            # ==================================================================
+            # LAYER 1: K-MEANS BEHAVIORAL SEGMENTATION
+            # ==================================================================
+            logger.info("LAYER 1: Running K-Means Behavioral Segmentation...")
+            try:
+                cluster_id = self.segmentation.predict(input_df)[0]
+                input_df['cluster_id'] = cluster_id
+                logger.info(f"✓ Segmentation complete: Assigned to cluster {cluster_id}")
+                logger.debug(f"  Cluster ID type: {type(cluster_id)}, value: {cluster_id}")
+            except Exception as e:
+                logger.error(f"✗ Segmentation failed: {str(e)}", exc_info=True)
+                raise
+            
+            # ==================================================================
+            # LAYER 2: ML CLASSIFICATION (Random Forest)
+            # ==================================================================
+            logger.info("LAYER 2: Running ML Classification (Random Forest)...")
+            try:
+                ml_probs_list = self.classifier.predict_proba(input_df)
+                ml_probs = ml_probs_list[0]
+                logger.info(f"✓ Classification complete: Generated {len(ml_probs)} probability scores")
+                logger.debug(f"  Top 3 class probabilities: {sorted(ml_probs, reverse=True)[:3]}")
+            except Exception as e:
+                logger.error(f"✗ Classification failed: {str(e)}", exc_info=True)
+                raise
+            
+            # ==================================================================
+            # LAYER 3: RANKING & PERSONALIZATION
+            # ==================================================================
+            logger.info("LAYER 3: Running Ranking & Personalization Layer...")
+            try:
+                ranked_cakes = self.ranker.rank_cakes(
+                    ml_probs=ml_probs,
+                    trend_popularity=user_input.get('trend_popularity_score', 0.5),
+                    health_preference=user_input.get('health_preference', 5),
+                    cluster_id=int(cluster_id)
                 )
-            }
+                logger.info(f"✓ Ranking complete: Generated {len(ranked_cakes)} ranked recommendations")
+                logger.debug(f"  Top 3: {[r['cake_name'] for r in ranked_cakes[:3]]}")
+            except Exception as e:
+                logger.error(f"✗ Ranking failed: {str(e)}", exc_info=True)
+                raise
+            
+            # Process results (silent mode)
+            results = {}
+            for idx, cake_result in enumerate(ranked_cakes):
+                results[cake_result['cake_name']] = {
+                    'rank': idx + 1,
+                    'final_score': cake_result['final_score'],
+                    'ml_probability': cake_result['ml_prob'],
+                    'health_alignment': cake_result['health_alignment'],
+                    'cluster_affinity': cake_result['cluster_affinity'],
+                    'cluster_id': int(cluster_id),
+                    'explanation': self._generate_explanation(
+                        cake_result,
+                        user_input,
+                        cluster_id
+                    )
+                }
+            
+            logger.info("=" * 80)
+            logger.info("✓ 3-LAYER HYBRID INFERENCE PIPELINE COMPLETE")
+            logger.info("=" * 80)
+            return results, int(cluster_id)
         
-        return results, int(cluster_id)
+        except Exception as e:
+            logger.error(f"✗ Entire prediction pipeline failed: {str(e)}", exc_info=True)
+            raise
     
     @staticmethod
     def _generate_explanation(cake_result, user_input, cluster_id):

@@ -15,8 +15,14 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
 import warnings
+import logging
 
 warnings.filterwarnings('ignore')
+
+# ============================================================================
+# LOGGING SETUP
+# ============================================================================
+logger = logging.getLogger(__name__)
 
 # Set up project root path
 _PROJECT_ROOT = Path(__file__).parent.parent.parent.absolute()
@@ -27,6 +33,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 try:
     from core.ml_engine.hybrid_recommender import HybridRecommendationSystem
 except ImportError as e:
+    logger.error(f"Cannot import hybrid_recommender: {str(e)}", exc_info=True)
     raise RuntimeError(f"Cannot import hybrid_recommender: {str(e)}")
 
 
@@ -103,29 +110,50 @@ class MLPipeline:
         Raises:
             PipelineError: If pipeline fails at any stage
         """
+        logger.info("=" * 80)
+        logger.info("ML PIPELINE: Starting orchestration")
+        logger.info("=" * 80)
+        
         warnings_list = []
         
         try:
             # Stage 1: Validate input
-            self._validate_input(input_data)
+            logger.info("STAGE 1: Validating input features...")
+            try:
+                self._validate_input(input_data)
+                logger.info("✓ Input validation successful")
+            except Exception as e:
+                logger.error(f"✗ Input validation failed: {str(e)}", exc_info=True)
+                raise
             
             # Stage 2: Run inference
+            logger.info("STAGE 2: Running hybrid recommendation system...")
             try:
                 hybrid_results, cluster_id = self.system.predict(input_data)
+                logger.info(f"✓ Inference complete: Got {len(hybrid_results)} results")
             except Exception as e:
+                logger.error(f"✗ Inference failed: {str(e)}", exc_info=True)
                 raise PipelineError(f"Inference failed: {str(e)}")
             
             # Stage 3: Extract and format results
-            sorted_results = sorted(
-                hybrid_results.items(),
-                key=lambda x: x[1].get('final_score', 0),
-                reverse=True
-            )
-            
-            top_3_cakes = [cake_name for cake_name, _ in sorted_results[:3]]
-            top_3_scores = [result.get('final_score', 0) for _, result in sorted_results[:3]]
+            logger.info("STAGE 3: Extracting and ranking results...")
+            try:
+                sorted_results = sorted(
+                    hybrid_results.items(),
+                    key=lambda x: x[1].get('final_score', 0),
+                    reverse=True
+                )
+                
+                top_3_cakes = [cake_name for cake_name, _ in sorted_results[:3]]
+                top_3_scores = [result.get('final_score', 0) for _, result in sorted_results[:3]]
+                logger.info(f"✓ Top 3 recommendations: {top_3_cakes}")
+                logger.debug(f"  Scores: {top_3_scores}")
+            except Exception as e:
+                logger.error(f"✗ Result extraction failed: {str(e)}", exc_info=True)
+                raise
             
             # Stage 4: Format Output
+            logger.info("STAGE 4: Formatting output...")
             output = {
                 'predictions': top_3_cakes,
                 'top_3_cakes': top_3_cakes,
@@ -138,13 +166,25 @@ class MLPipeline:
             }
             
             # Validate output
-            self._validate_output(output)
+            logger.info("STAGE 5: Validating output schema...")
+            try:
+                self._validate_output(output)
+                logger.info("✓ Output validation successful")
+            except Exception as e:
+                logger.error(f"✗ Output validation failed: {str(e)}", exc_info=True)
+                raise
+            
+            logger.info("=" * 80)
+            logger.info("✅ ML PIPELINE: COMPLETE SUCCESS")
+            logger.info("=" * 80)
             
             return output
         
-        except PipelineError:
+        except PipelineError as e:
+            logger.error(f"❌ ML PIPELINE: FAILED - {str(e)}", exc_info=True)
             raise
         except Exception as e:
+            logger.error(f"❌ ML PIPELINE: UNEXPECTED ERROR - {str(e)}", exc_info=True)
             raise PipelineError(f"Unexpected pipeline error: {str(e)}")
     
     def _validate_input(self, input_data: Dict[str, Any]) -> None:
@@ -188,10 +228,13 @@ def initialize_pipeline() -> None:
     """Initialize the global pipeline instance."""
     global _pipeline_instance, _pipeline_error
     
+    logger.info("Initializing ML Pipeline singleton...")
     try:
         _pipeline_instance = MLPipeline()
         _pipeline_error = None
+        logger.info("✓ ML Pipeline initialized successfully")
     except PipelineError as e:
+        logger.error(f"✗ ML Pipeline initialization failed: {str(e)}", exc_info=True)
         _pipeline_error = e
         _pipeline_instance = None
 
@@ -201,11 +244,14 @@ def get_pipeline() -> MLPipeline:
     global _pipeline_instance, _pipeline_error
     
     if _pipeline_error:
+        logger.error(f"ML Pipeline error on access: {str(_pipeline_error)}")
         raise RuntimeError(f"ML Pipeline failed to initialize: {str(_pipeline_error)}")
     
     if _pipeline_instance is None:
+        logger.error("ML Pipeline not initialized")
         raise RuntimeError("ML Pipeline not initialized")
     
+    logger.debug("Returning ML Pipeline instance")
     return _pipeline_instance
 
 
