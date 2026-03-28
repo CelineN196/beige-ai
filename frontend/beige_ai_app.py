@@ -160,6 +160,9 @@ if 'page' not in st.session_state:
 if 'ai_result' not in st.session_state:
     st.session_state.ai_result = None
 
+if 'engine_type' not in st.session_state:
+    st.session_state.engine_type = 'unknown'  # "hybrid", "ml", "rule_based", or "unknown"
+
 if 'has_generated' not in st.session_state:
     st.session_state.has_generated = False
 
@@ -978,7 +981,7 @@ def display_ai_recommendations():
     mood = result['mood']
     weather_condition = result['weather_condition']
     model_version = result.get('model_version', 'UNKNOWN')
-    prediction_source = result.get('prediction_source', 'UNKNOWN')
+    engine_type = result.get('engine_type', 'unknown')  # Get engine classification
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
@@ -986,7 +989,15 @@ def display_ai_recommendations():
     # STEP 1: ML SYSTEM HEADER (Trust & Transparency)
     # =================================================================
     st.markdown("<div style='text-align: center; margin-bottom: 30px;'>", unsafe_allow_html=True)
-    if "ML" in prediction_source or "Hybrid" in prediction_source:
+    
+    if engine_type == "hybrid":
+        st.markdown("""
+        <div style='padding: 16px; background: #F0F8FF; border-left: 4px solid #1F52A6; border-radius: 4px;'>
+            <strong style='font-size: 1.1em;'>🤖 Hybrid 3-Layer AI (Segmentation→Classification→Ranking)</strong><br>
+            <span style='color: #666; font-size: 0.95em;'>Predictions powered by behavioral clustering and behavioral analysis</span>
+        </div>
+        """, unsafe_allow_html=True)
+    elif engine_type == "ml":
         st.markdown("""
         <div style='padding: 16px; background: #F0F8FF; border-left: 4px solid #1F52A6; border-radius: 4px;'>
             <strong style='font-size: 1.1em;'>🧠 AI Recommendation Engine (ML-Powered)</strong><br>
@@ -1000,6 +1011,7 @@ def display_ai_recommendations():
             <span style='color: #666; font-size: 0.95em;'>Recommendations based on established preference patterns</span>
         </div>
         """, unsafe_allow_html=True)
+    
     st.markdown("</div>", unsafe_allow_html=True)
     
     # =================================================================
@@ -1406,6 +1418,7 @@ def display_checkout():
                     if st.session_state.order_logged:
                         st.session_state.cart = []
                         st.session_state.ai_result = None
+                        st.session_state.engine_type = 'unknown'
                         st.session_state.has_generated = False
                         st.balloons()
                         st.rerun()
@@ -1618,6 +1631,7 @@ else:  # Store page
 
     if generate_button:
         st.session_state.has_generated = False
+        st.session_state.engine_type = 'unknown'
         st.session_state.order_logged = False
         st.session_state.micro_story = None
 
@@ -1702,6 +1716,7 @@ else:  # Store page
                         probabilities[idx] = score
                 
                 prediction_source = "🤖 Hybrid 3-Layer (Segmentation→Classification→Ranking)"
+                engine_type = "hybrid"  # Set engine classification
                 
                 # Debug output
                 if DEBUG:
@@ -1739,7 +1754,8 @@ else:  # Store page
                 'weather_condition': st.session_state.weather_condition,
                 'time_of_day': st.session_state.time_of_day,
                 'model_version': ML_VERSION,
-                'prediction_source': prediction_source
+                'prediction_source': prediction_source,
+                'engine_type': engine_type  # Store engine classification
             }
             st.session_state.has_generated = True
             
@@ -1752,12 +1768,12 @@ else:  # Store page
             )
             
             # Show success message with prediction source
-            if "Hybrid" in prediction_source or "ML" in prediction_source:
-                st.success(f"✨ {prediction_source}: Your personalized recommendations are ready.")
-            elif "Rule-Based" in prediction_source:
-                st.info(f"✨ {prediction_source}: Your personalized recommendations are ready (rule-based).")
+            if engine_type == "hybrid":
+                st.success("✨ Hybrid 3-Layer AI: Your personalized recommendations are ready.")
+            elif engine_type == "ml":
+                st.success("✨ ML-Powered: Your personalized ML-powered recommendations are ready.")
             else:
-                st.success(f"✨ Recommendations generated: {prediction_source}")
+                st.info("✨ Rule-Based: Your personalized recommendations are ready.")
 
 
 
