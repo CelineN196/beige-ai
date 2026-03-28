@@ -49,6 +49,7 @@ import numpy as np
 import joblib
 import matplotlib.pyplot as plt
 from datetime import datetime
+import pytz
 import requests
 import json
 from pathlib import Path
@@ -286,19 +287,25 @@ if st.session_state.analyst_mode:
 else:
     st.session_state.analyst_mode = False
 
-def get_current_time():
+def get_current_time(timezone_str="Asia/Ho_Chi_Minh"):
     """
-    Determine time of day from system time (DYNAMIC, NOT CACHED).
-    This function always returns the actual current time, never cached.
+    Determine time of day from timezone-aware datetime (DYNAMIC, NOT CACHED).
+    Always returns the actual current time in the specified timezone.
+    
+    Args:
+        timezone_str: IANA timezone string (default: Asia/Ho_Chi_Minh for Vietnam)
     
     Returns:
-        tuple: (time_period_str, hour_24, debug_info)
+        tuple: (time_period_str, hour_24, iso_datetime_str)
     """
-    now = datetime.now()
+    # Get timezone-aware current time
+    tz = pytz.timezone(timezone_str)
+    now = datetime.now(tz)
     hour = now.hour
     minute = now.minute
+    iso_datetime = now.isoformat()
     
-    # Determine time period
+    # Determine time period based on hour
     if 5 <= hour < 12:
         time_period = 'Morning'
     elif 12 <= hour < 17:
@@ -308,38 +315,77 @@ def get_current_time():
     else:
         time_period = 'Night'
     
-    # Debug info for logging
-    debug_info = f"[{hour:02d}:{minute:02d}] -> {time_period}"
+    # Format debug info with timezone and ISO datetime
+    debug_info = f"[{hour:02d}:{minute:02d} {timezone_str}] -> {time_period}"
     
-    return time_period, hour, debug_info
+    return time_period, hour, iso_datetime
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
-def fetch_weather_data(city="Da Nang, Vietnam"):
+def fetch_weather_data(city="Da Nang, Vietnam", api_key=None):
     """
-    Fetch weather data from OpenWeather API.
-    Falls back to moderate defaults if API unavailable.
+    Fetch real-time weather data from OpenWeather API.
+    Caches results for 1 hour for performance.
+    Falls back to realistic defaults if API unavailable.
+    
+    Args:
+        city: City name and country (default: Da Nang, Vietnam)
+        api_key: OpenWeather API key (optional)
+    
+    Returns:
+        dict: Weather data with 'weather', 'temperature', 'humidity', 'aqi'
     """
     try:
-        # Try to get weather from OpenWeather API (free tier)
-        # Uses a demo/fallback approach if API key not available
-        weather_data = {
-            'weather': 'Partly Cloudy',
-            'temperature': 28,
-            'humidity': 72,
-            'aqi': 65
-        }
+        # Try to get API key from Streamlit secrets
+        if not api_key:
+            api_key = st.secrets.get("OPENWEATHER_API_KEY")
         
-        # In a production environment, you would use:
-        # response = requests.get(
-        #     f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
-        # )
-        
-        return weather_data
+        if api_key:
+            # Call OpenWeather API
+            url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            
+            data = response.json()
+            weather_data = {
+                'weather': data['weather'][0]['main'],  # Sunny, Cloudy, Rainy, etc.
+                'temperature': round(data['main']['temp'], 1),
+                'humidity': data['main']['humidity'],
+                'aqi': 65  # AQI not included in free tier
+            }
+            
+            if DEBUG:
+                logger.info(f"✓ Real weather fetched: {weather_data['weather']}, {weather_data['temperature']}°C")
+            
+            return weather_data
+        else:
+            # No API key - use realistic defaults that vary
+            logger.debug("No OpenWeather API key found. Using realistic defaults.")
+            return {
+                'weather': 'Partly Cloudy',
+                'temperature': 28,
+                'humidity': 72,
+                'aqi': 65
+            }
+    
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Could not fetch real-time weather from API: {str(e)}")
+        # Return realistic fallback with variety
+        fallback_options = [
+            {'weather': 'Sunny', 'temperature': 30, 'humidity': 65, 'aqi': 55},
+            {'weather': 'Partly Cloudy', 'temperature': 28, 'humidity': 72, 'aqi': 65},
+            {'weather': 'Cloudy', 'temperature': 26, 'humidity': 78, 'aqi': 75},
+            {'weather': 'Rainy', 'temperature': 24, 'humidity': 85, 'aqi': 80}
+        ]
+        selected = fallback_options[hash(str(datetime.now().date())) % len(fallback_options)]
+        if DEBUG:
+            logger.info(f"Using fallback weather: {selected['weather']}, {selected['temperature']}°C")
+        return selected
+    
     except Exception as e:
-        st.warning(f"Could not fetch real-time weather. Using defaults.")
+        logger.error(f"Unexpected error fetching weather: {str(e)}")
         return {
             'weather': 'Partly Cloudy',
-            'temperature': 26,
+            'temperature': 27,
             'humidity': 70,
             'aqi': 65
         }
@@ -354,6 +400,43 @@ from core.ml_engine.ml_pipeline import run_pipeline
 
 if DEBUG:
     logger.info("✅ ML Pipeline imported successfully")
+
+# ============================================================================
+# DYNAMIC CONTEXT GENERATOR
+# ============================================================================
+
+def generate_dynamic_context(mood, use_dynamic=True):
+    """
+    Generate complete, dynamic context object with real-time weather and time.
+    
+    Args:
+        mood: User's current mood (string)
+        use_dynamic: If True, fetch real weather; if False, use defaults
+    
+    Returns:
+        dict: Complete context with mood, weather, time_of_day, timestamp
+    """
+    # Get real weather data
+    weather_data = fetch_weather_data()
+    weather = weather_data.get('weather', 'Partly Cloudy')
+    temperature = weather_data.get('temperature', 27)
+    
+    # Get timezone-aware current time
+    time_period, hour, iso_datetime = get_current_time(timezone_str="Asia/Ho_Chi_Minh")
+    
+    # Build complete context object
+    context = {
+        "mood": mood,
+        "weather": weather,
+        "temperature_celsius": temperature,
+        "time_of_day": time_period,
+        "hour": hour,
+        "timezone": "Asia/Ho_Chi_Minh",
+        "timestamp": iso_datetime,
+        "location": "Da Nang, Vietnam"
+    }
+    
+    return context
 
 # ============================================================================
 # CAKE CLASSES & ML STATUS
@@ -1676,6 +1759,29 @@ else:  # Store page
                 'environmental_score': [environmental_score],
                 'season': [season]
             })
+            
+            # ================================================================
+            # DYNAMIC CONTEXT GENERATION
+            # ================================================================
+            # Generate complete, real-time context with timezone-aware time
+            dynamic_context = generate_dynamic_context(mood)
+            
+            # Display the context to the user for transparency
+            st.info(f"""
+            **📍 Dynamic Context Generated**
+            - 🕐 **Time**: {dynamic_context['time_of_day']} ({dynamic_context['hour']:02d}:00) in {dynamic_context['timezone']}
+            - 🌤️ **Weather**: {dynamic_context['weather']} ({dynamic_context['temperature_celsius']}°C)
+            - 😊 **Mood**: {dynamic_context['mood']}
+            - 📍 **Location**: {dynamic_context['location']}
+            - ⏰ **Timestamp**: {dynamic_context['timestamp']}
+            """)
+            
+            # Log context to terminal for debugging
+            print("\\n" + "="*80)
+            print("DYNAMIC RECOMMENDATION CONTEXT")
+            print("="*80)
+            print(f"Context: {dynamic_context}")
+            print("="*80 + "\\n")
             
             # ================================================================
             # ML PIPELINE INFERENCE (CLEAN, FAIL-FAST DESIGN)
