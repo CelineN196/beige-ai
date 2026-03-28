@@ -986,7 +986,7 @@ def display_ai_recommendations():
     # STEP 1: ML SYSTEM HEADER (Trust & Transparency)
     # =================================================================
     st.markdown("<div style='text-align: center; margin-bottom: 30px;'>", unsafe_allow_html=True)
-    if "ML" in prediction_source:
+    if "ML" in prediction_source or "Hybrid" in prediction_source:
         st.markdown("""
         <div style='padding: 16px; background: #F0F8FF; border-left: 4px solid #1F52A6; border-radius: 4px;'>
             <strong style='font-size: 1.1em;'>🧠 AI Recommendation Engine (ML-Powered)</strong><br>
@@ -1752,10 +1752,8 @@ else:  # Store page
             )
             
             # Show success message with prediction source
-            if "Hybrid" in prediction_source:
+            if "Hybrid" in prediction_source or "ML" in prediction_source:
                 st.success(f"✨ {prediction_source}: Your personalized recommendations are ready.")
-            elif "ML" in prediction_source:
-                st.success(f"✨ {prediction_source}: Your personalized ML-powered recommendations are ready.")
             elif "Rule-Based" in prediction_source:
                 st.info(f"✨ {prediction_source}: Your personalized recommendations are ready (rule-based).")
             else:
