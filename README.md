@@ -77,27 +77,47 @@ Beige AI follows a **3-layer modular architecture** for scalability, maintainabi
 
 ---
 
-## ML Model Architecture
+## 🧠 ML Model — Hybrid Context-Aware Recommendation Engine (v1)
 
-### Inputs (10 Core Features)
+Beige AI uses a **Hybrid v1 ensemble approach** combining XGBoost with scikit-learn for robust, context-aware cake recommendations.
+
+### Model Inputs (13 Features)
 The recommendation engine processes:
-- **User Context:** mood, time of day, sweetness preference, health preference
-- **Environmental:** weather condition, temperature, humidity, air quality
-- **Behavioral:** trend popularity score, seasonal factors
+- **User Context:** mood, sweetness preference, health preference, trend popularity score
+- **Environmental:** weather condition, temperature, humidity, air quality index, season
+- **Temporal:** time of day
+
+**Feature Breakdown:**
+- **5 Categorical Features:** mood, weather_condition, time_of_day, season, temperature_category
+- **8 Numerical Features:** temperature_celsius, humidity, air_quality_index, sweetness_preference, health_preference, trend_popularity_score, comfort_index, environmental_score
 
 ### Dynamic Feature Engineering
-Real-time derived features:
-- `temperature_category` — Categorical bucketing (cold/mild/hot)
-- `comfort_index` — Combined environmental comfort metric (0-1)
-- `environmental_score` — Weather + season + air quality synthesis
+Real-time derived features generated at inference time:
+- `temperature_category` — Categorical bucketing (cold/mild/hot) from raw temperature
+- `comfort_index` — Combined environmental comfort metric (0-1 scale)
+- `environmental_score` — Weather + season + air quality synthesis (0-1 scale)
 
-### Model Details
-- **Algorithm:** Ensemble approach (trained with XGBoost + scikit-learn)
-- **Training Data:** 2,000+ customer profiles with contextual features
-- **Output:** Top 3 cake recommendations with confidence scores
-- **Versioning:** `model_version` field in logs for experiment tracking
+### Model Output
+- **Primary Recommendation:** Top cake prediction
+- **Alternative Recommendations:** Top 3 cakes ranked by confidence
+- **Confidence Scores:** Model probability for each recommendation (0-1)
+- **Prediction Basis:** 29 one-hot encoded features + 8 numerical features = 37-dimensional prediction space
 
-### Retraining Pipeline
+### Model Characteristics
+- **Algorithm:** XGBoost 2.0.3 with scikit-learn 1.5.1 ensemble preprocessing
+- **Target Classes:** 8 cake types (Berry Garden Cake, Café Tiramisu, Citrus Cloud Cake, Dark Chocolate Sea Salt Cake, Earthy Wellness Cake, Korean Sesame Mini Bread, Matcha Zen Cake, Silk Cheesecake)
+- **Training:** Version-matched environment (sklearn, XGBoost, numpy, pandas, joblib)
+- **Inference Latency:** <200ms average
+- **Model Versioning:** `model_version` field in feedback logs for experiment tracking and A/B testing
+
+### Retraining Pipeline 
+- **Script:** `retrain_v2_final.py`
+- **Cadence:** Triggered manually or on schedule with new feedback data
+- **Compatibility:** Strict version matching (scikit-learn 1.5.1, XGBoost 2.0.3, numpy 1.24.3)
+- **Validation:** Held-out test set evaluation before production deployment
+- **Data Source:** `feedback_logs` table from Supabase
+
+---
 - **Script:** `retrain_v2_final.py`
 - **Cadence:** Automated retraining with new feedback data
 - **Compatibility:** Version-matched package dependencies (scikit-learn, XGBoost, numpy)

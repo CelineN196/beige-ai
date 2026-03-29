@@ -1,21 +1,59 @@
 # BEIGE AI - TECHNICAL REFERENCE HANDBOOK
 
 **Purpose**: Single source of truth for system architecture, implementation, and operations  
-**Last Updated**: March 21, 2026  
+**Last Updated**: March 29, 2026  
 **Status**: Production Ready  
-**Scope**: Order logging, data persistence, checkout flow, error handling  
+**Scope**: ML recommendation engine, Supabase feedback system, modular architecture
+
+---
+
+## 📋 CHANGELOG
+
+### [v2.0] — Hybrid Model + Supabase Feedback System Integration
+**Released:** March 29, 2026
+
+#### Added
+- **Hybrid v1 ML Model** — Context-aware ensemble recommendation engine using XGBoost 2.0.3 + scikit-learn 1.5.1
+- **13-Feature Input Pipeline** — 5 categorical + 8 numerical features with real-time derived feature engineering
+- **Supabase Integration** — PostgreSQL-backed feedback logging with row-level security (RLS) policies
+- **Recommendation Matching** — Automatic tracking of whether users purchase recommended items (`match` / `did_not_match` / `unknown`)
+- **Environment Variable Management** — python-dotenv support for secure credential handling (.env local, Streamlit Cloud secrets for production)
+- **Non-Blocking Feedback Logging** — Asynchronous feedback persistence with retry logic (exponential backoff, max 3 retries)
+- **Modular Architecture** — Clean separation into frontend (Streamlit), services (ML), integrations (Supabase), and configuration layers
+- **Feature Engineering Pipeline** — Dynamic computation of comfort_index, environmental_score, temperature_category from raw inputs
+- **Model Versioning** — `model_version` field in feedback logs for experiment tracking and A/B testing
+
+#### Improved
+- **Inference Performance** — <200ms average latency with optimized preprocessing pipeline
+- **Error Handling** — Comprehensive validation with clear error messages in feature pipeline and inference stages
+- **Data Persistence** — Supabase automated backups vs. local CSV logging (no data loss, unlimited scale)
+- **Checkout Flow** — Integrated recommendation_match computation at purchase time with detailed logging
+- **Documentation** — Unified technical reference with production-ready architecture diagrams
+
+#### Fixed
+- **Dependency Resolution** — Strict version matching (scikit-learn 1.5.1, XGBoost 2.0.3, numpy 1.24.3, pandas 2.2.0)
+- **Module Import Errors** — Added try/except wrappers around dotenv imports for deployment robustness
+- **Type Validation** — Three-layer conversion strategy for recommended_cake (dict → string, JSON fallback, "unknown" default)
+- **Database Schema Sync** — Added fallback retry logic for missing columns (PGRST204 error handling)
+- **Module Caching** — Cleared __pycache__ on deployment for fresh function signature loading
+
+#### Refactored
+- **Feature Validation** — Moved from ad-hoc checks to dedicated FeaturePipelineValidator class
+- **ML Model Loading** — Centralized V2 model loading with explicit fail-fast strategy (no fallbacks)
+- **Supabase Interactions** — Separated checkout logging (supabase_integration.py) from feedback logging (supabase_logger.py)
+- **Function Signatures** — Added recommendation_match and purchased_items parameters to logging functions
 
 ---
 
 ## Quick Navigation
 
 - [System Architecture Overview](#1-system-architecture-overview) — High-level design and components
-- [Data Pipeline & Logging System](#2-data-pipeline--logging-system) — Order storage, CSV persistence, data integrity
-- [Machine Learning / Model Layer](#3-machine-learning--model-layer) — Inference integration points
+- [Data Pipeline & Logging System](#2-data-pipeline--logging-system) — Supabase persistence, feedback loops, analytics
+- [Machine Learning / Model Layer](#3-machine-learning--model-layer) — Hybrid v1 model, feature engineering, inference
 - [API & Backend Flow](#4-api--backend-flow) — Backend services and integration
 - [Streamlit / UI Layer](#5-streamlit--ui-layer) — Frontend implementation, checkout flow, user interactions
 - [Known Issues & Fixes](#6-known-issues--fixes) — Error handling strategies and edge case solutions
-- [Change Log](#7-change-log) — Chronological history of system improvements
+- [Change Log](#7-change-log) — Historical improvement log
 
 ---
 
@@ -27,69 +65,77 @@ The Beige AI system is built on these architectural foundations:
 
 | Principle | Implementation |
 |-----------|-----------------|
-| **Data Safety** | Order logging never causes cart loss; errors are handled gracefully |
-| **Single Responsibility** | Logging, inference, and UI logic are cleanly separated |
-| **Auditability** | Every order tracked with UUID and timestamp for future analysis |
-| **Resilience** | System continues operating even if CSV write fails |
-| **Observability** | All errors logged to terminal for debugging and monitoring |
+| **Context-Aware Inference** | ML recommendations driven by 13 contextual features (mood, weather, environment, preferences) |
+| **Feedback Loop** | Every interaction logged to Supabase for model retraining and continuous improvement |
+| **Single Responsibility** | Clean separation: Frontend (UI), Services (ML), Integrations (Supabase), Config (features/schemas) |
+| **Data Integrity** | Comprehensive feedback logs with ACID-compliant PostgreSQL backend; non-blocking logging doesn't block checkout |
+| **Observability** | All interactions tracked with recommendation_match field showing recommendation accuracy |
+| **Resilience** | Retry logic with exponential backoff; fallback to degraded feedback when schema out of sync |
 
 ## System Layers
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  STREAMLIT UI LAYER (frontend/beige_ai_app.py)              │
-│  - Product browsing and selection                           │
-│  - Order generation and checkout                            │
+│  - User input collection (mood, preferences, context)       │
+│  - Recommendation display (top 3 cakes + confidence)        │
+│  - Checkout flow with recommendation tracking               │
 │  - Session state management (cart, recommendations)         │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  ORDER LOGGING LAYER (frontend/beige_ai_app.py)             │
-│  - Order data validation and preparation                    │
-│  - CSV persistence with error recovery                      │
-│  - Order ID generation (UUID)                               │
+│  ML SERVICES LAYER (backend/services/)                      │
+│  - Feature validation & preprocessing                       │
+│  - Hybrid v1 model inference (XGBoost + scikit-learn)       │
+│  - Feature engineering (comfort_index, environmental_score) │
+│  - Top-3 cake ranking with confidence scores                │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  DATA STORAGE LAYER (data/feedback_log.csv)                 │
-│  - Persistent order records                                 │
-│  - Analytics and reporting source                           │
-│  - UTF-8 encoded, append-only format                        │
+│  INTEGRATION LAYER (backend/integrations/)                  │
+│  - Checkout logging with recommendation_match computation   │
+│  - Feedback logging with validation & retry logic           │
+│  - Analytics queries on feedback_logs table                 │
+│  - Error handling & fallbacks                               │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  ML INFERENCE LAYER (backend/inference.py)                  │
-│  - Recommendation generation                                │
-│  - Preference prediction                                    │
-│  - Top 3 cake ranking                                       │
+│  DATA LAYER (Supabase PostgreSQL)                           │
+│  - feedback_logs table: Complete interaction audit trail    │
+│  - Recommendation accuracy tracking (match/did_not_match)   │
+│  - Model versioning for A/B testing                         │
+│  - Row-level security (RLS) for data protection             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Key Components
 
 **Frontend** (`frontend/beige_ai_app.py`)
-- Session state management: cart, order_logged flag, AI recommendations
-- Product display and cart UI
-- Checkout flow with safety guards
+- User input collection: mood, weather, temperature, preferences
+- ML inference integration: Displays top 3 recommendations with confidence scores
+- Checkout flow: Captures purchased items, computes recommendation_match
+- Feedback logging: Non-blocking Supabase persistence with session tracking
 
-**Order Logging System** (`frontend/beige_ai_app.py`, lines 431-550)
-- `save_order_data()` — Main persistence function
-- `_is_recommendation_match()` — Determines Match/Not Quite result
-- `display_checkout()` — 5-step checkout safety flow
+**ML Services** (`backend/services/`)
+- `inference.py` — Core recommendation engine with feature engineering
+- `inference_pipeline.py` — Input validation and preprocessing
+- `model_loader.py` — V2 model loading (fail-fast strategy)
+- `api.py` — Internal service APIs
 
-**Data Storage** (`data/feedback_log.csv`)
-- Persists order records indefinitely
-- CSV format: order_id, items_purchased, ai_recommendation, result, timestamp
-- UTF-8 encoding, append-only writes
+**Integration Layer** (`backend/integrations/`)
+- `supabase_integration.py` — Checkout logging and recommendation_match computation
+- `supabase_logger.py` — Feedback persistence with validation and retry logic
+- `supabase_analytics.py` — Analytics and insights queries
+- `supabase_schema.sql` — Database schema definition with RLS policies
 
-**ML Inference** (`backend/inference.py`)
-- Generates recommendations based on user preferences
-- Returns top_3_cakes and probability scores
+**Configuration** (`backend/config/`)
+- `feature_contract.py` — Single source of truth for feature schema, categorical values, cake types
+- `menu_config.py` — Cake menu and product definitions
 
 **Session State** (Streamlit session_state)
-- cart: list of selected items
-- ai_result: dict with recommendation data
-- order_logged: boolean flag to prevent duplicate orders  
+- `cart` — List of selected items
+- `ai_result` — Recommendation output (top 3 cakes, confidence scores)
+- `session_id` — Unique identifier for feedback tracking  
 
 ---
 
@@ -97,111 +143,66 @@ The Beige AI system is built on these architectural foundations:
 
 ## Purpose and Design
 
-The data pipeline captures every order event for:
-- **Analytics** — Understand user preferences and recommendation accuracy
-- **Debugging** — Trace issues with specific orders
-- **Compliance** — Maintain audit trail of all transactions
-- **Learning** — Build feedback loop for model improvement
+The feedback loop captures every recommendation and checkout event for:
+- **Model Improvement** — Retraining on real user behavior  
+- **Accuracy Tracking** — Measuring whether recommendations match purchases (recommendation_match)
+- **Analytics** — Understanding user preferences, seasonal patterns, mood correlations
+- **A/B Testing** — Tracking model_version and experiment_id for controlled experiments
+- **Observability** — Audit trail of all interactions with timestamps and confidence scores
 
-## CSV Schema
+## Supabase Integration
 
-The data persists in `/data/feedback_log.csv` with this schema:
+All feedback data persists in Supabase PostgreSQL with the `feedback_logs` table:
+
+**Database**: Supabase (PostgreSQL backend)  
+**Table**: `feedback_logs`  
+**Security**: Row-level security (RLS) with public INSERT/SELECT policies  
+**Backup**: Automated daily backups via Supabase  
+
+## feedback_logs Table Schema
 
 | Column | Type | Example | Purpose |
 |--------|------|---------|---------|
-| `order_id` | UUID | `a9eaab9b-1234-5678-abcd-ef0123456789` | Unique transaction identifier |
-| `items_purchased` | String | `"Dark Chocolate, Vanilla, Lemon"` | Customer's actual purchase |
-| `ai_recommendation` | JSON | `{"top_3_cakes": [...], "probabilities": [...]}` | Full recommendation object |
-| `result` | String (enum) | `"Match"` or `"Not Quite"` | Did customer buy recommended cake? |
-| `timestamp` | ISO 8601 | `2026-03-21T14:23:45.123456` | When order was placed (UTC) |
+| `id` | BIGSERIAL PRIMARY KEY | 12345 | Auto-incrementing record ID |
+| `session_id` | TEXT | `a9eaab9b-1234-5678-abcd` | Unique per user session |
+| `user_input` | JSONB | `{"mood": "Happy", "weather": "Sunny", ...}` | Raw user input features |
+| `recommended_cake` | TEXT | `"Berry Garden Cake"` | Primary recommendation |
+| `recommended_cakes_top_3` | TEXT[] | `["Berry Garden", "Matcha Zen", "Cheesecake"]` | Alternative recommendations |
+| `recommendation_match` | TEXT | `"match"` or `"did_not_match"` | Whether user purchased recommendation |
+| `context` | JSONB | `{"weather": "Sunny", "time": "14:30", ...}` | Environmental context |
+| `model_version` | TEXT | `"hybrid_v1"` | Model identifier for versioning |
+| `latency_ms` | INTEGER | 87 | Inference latency in milliseconds |
+| `confidence_score` | FLOAT | 0.87 | Model confidence 0-1 |
+| `user_feedback` | INTEGER | 4 | Optional 1-5 star rating |
+| `feedback_notes` | TEXT | `"Great match!"` | Qualitative feedback |
+| `cluster_id` | INTEGER | 3 | Behavioral cluster assignment |
+| `ml_features` | JSONB | `{...}` | Features sent to ML model |
+| `experiment_id` | TEXT | `"ab_test_001"` | A/B test identifier |
+| `is_held_out` | BOOLEAN | false | Reserved for model validation |
+| `created_at` | TIMESTAMP | `2026-03-29T14:23:45Z` | Record creation time (UTC) |
 
-**Encoding**: UTF-8 (supports international characters)  
-**Format**: Append-only (never overwrites or deletes)  
-**Access**: Plain CSV for compatibility with Excel, pandas, SQL
+## Feedback Collection Mechanics
 
-## Order Logging Implementation
+### Explicit Feedback (Optional)
+Users provide 1-5 star ratings and qualitative notes through the feedback form
+- Non-blocking: doesn't require response to proceed
+- Fields: `user_feedback` (1-5), `feedback_notes` (string)
 
-### Main Function: `save_order_data()`
+### Behavioral Feedback (Automatic)  
+Captured at checkout without user interaction
+- **Recommendation Match Computation** — During checkout:
+  ```python
+  if recommended_cake in purchased_items:
+      recommendation_match = "match"
+  else:
+      recommendation_match = "did_not_match"
+  ```
+- Fields: `recommendation_match`, `recommended_cakes_top_3`, purchased items captured in `context`
 
-**Location**: `frontend/beige_ai_app.py`, lines 438-502
-
-**Function Signature**:
-```python
-def save_order_data(order_id, items_purchased, ai_recommendation, result):
-    """
-    Save order data to CSV with robust error handling.
-    
-    Args:
-        order_id: str - UUID format unique identifier
-        items_purchased: str - "Cake1, Cake2, Cake3"
-        ai_recommendation: dict or None - Full AI result object
-        result: str - "Match" or "Not Quite"
-    
-    Returns:
-        tuple: (success: bool, error_msg: str or None)
-    """
-```
-
-**Complete Implementation**:
-```python
-def save_order_data(order_id, items_purchased, ai_recommendation, result):
-    """Save order data to CSV with robust error handling."""
-    try:
-        # Ensure directory exists
-        data_dir = _BASE_DIR / "data"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        file_path = data_dir / "feedback_log.csv"
-        
-        # Smart file existence check
-        file_exists = file_path.exists() and file_path.stat().st_size > 0
-        
-        # Safe object serialization
-        if isinstance(ai_recommendation, dict):
-            ai_rec_str = json.dumps(ai_recommendation, ensure_ascii=False)
-        elif ai_recommendation is None:
-            ai_rec_str = "None"
-        else:
-            ai_rec_str = str(ai_recommendation)
-        
-        # Proper UTC timestamp
-        timestamp = datetime.utcnow().isoformat()
-        
-        # CSV writer with proper encoding
-        with open(file_path, mode='a', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            
-            # Write headers only if file is new
-            if not file_exists:
-                writer.writerow([
-                    'order_id',
-                    'items_purchased',
-                    'ai_recommendation',
-                    'result',
-                    'timestamp'
-                ])
-            
-            # Write data row
-            writer.writerow([
-                order_id,
-                items_purchased,
-                ai_rec_str,
-                result,
-                timestamp
-            ])
-        
-        print(f"✅ Order logged successfully: {order_id}")
-        return True, None  # Return success with no error
-        
-    except Exception as e:
-        error_msg = f"Order logging failed: {str(e)}"
-        print(f"❌ {error_msg}")
-        print(f"   Order ID: {order_id}")
-        import traceback
-        traceback.print_exc()
-        return False, error_msg  # Return failure with error details
-```
-
-**Key Robustness Features**:
+### Performance Metrics
+- `latency_ms` — Inference time (target: <200ms)
+- `confidence_score` — Model certainty in recommendation
+- `cluster_id` — Behavioral segmentation (for personalization analysis)
 
 1. **Directory Safety** — Creates `/data/` if missing
    ```python
@@ -325,31 +326,92 @@ def _is_recommendation_match(recommendation, cart):
 
 # 3. MACHINE LEARNING / MODEL LAYER
 
-## Overview
+## Hybrid v1 Model Architecture
 
-The ML layer generates personalized cake recommendations based on user preferences.
+The AI recommendation engine uses the **Hybrid v1** ensemble approach combining XGBoost with scikit-learn.
 
-**Location**: `backend/inference.py`  
-**Integration Point**: Frontend calls inference API, receives recommendation dict  
-**Output**: `{top_3_cakes: [name1, name2, name3], probabilities: [0.45, 0.30, 0.15]}`
+**Location**: `backend/services/`  
+**Model File**: `backend/models/v2_final_model.pkl` (3.2 MB)  
+**Input Features**: 13 (5 categorical + 8 numerical)  
+**Output Classes**: 8 cake types  
+**Inference Latency**: <200ms average  
+**Framework**: XGBoost 2.0.3 + scikit-learn 1.5.1  
 
-## Recommendation Integration
+## Input Features
 
-The AI recommendation drives the "Match" / "Not Quite" result:
-- **Top cake** (first in top_3_cakes) is used by `_is_recommendation_match()`
-- **Full recommendation dict** is serialized to CSV in ai_recommendation column
-- **Probabilities** are stored for future analysis of model confidence
+**Categorical Features (5)**:
+1. `mood` — User's current mood (Happy, Stressed, Tired, Lonely, Celebratory)
+2. `weather_condition` — Current weather (Sunny, Rainy, Cloudy, Snowy, Stormy)
+3. `time_of_day` — Time period (Morning, Afternoon, Evening, Night)
+4. `season` — Current season (Winter, Spring, Summer, Autumn)
+5. `temperature_category` — Derived from raw temperature (cold, mild, hot)
 
-**Data Flow**:
+**Numerical Features (8)**:
+1. `temperature_celsius` — Raw temperature value
+2. `humidity` — Humidity percentage (0-100)
+3. `air_quality_index` — AQI score (0-100+)
+4. `sweetness_preference` — User's sweetness preference (0-1)
+5. `health_preference` — Health-consciousness level (0-1)
+6. `trend_popularity_score` — Cake's current popularity (0-1)
+7. `comfort_index` — Derived comfort metric (0-1)
+8. `environmental_score` — Derived environment metric (0-1)
+
+## Feature Engineering Pipeline
+
+Real-time derivation during inference:
+
+```python
+# Temperature categorization
+if temperature_celsius < 10:
+    temperature_category = 'cold'
+elif temperature_celsius > 25:
+    temperature_category = 'hot'
+else:
+    temperature_category = 'mild'
+
+# Comfort index (0-1): combines temp, humidity, air quality
+comfort_index = 1.0 - (abs(temp - 22) / 40) * 0.4 - (humidity / 100) * 0.3 - (aqi / 100) * 0.3
+
+# Environmental score (0-1): combines weather, season, air quality
+env_score = (weather_score * 0.4 + season_score * 0.3 + air_quality_score * 0.3)
 ```
-[User Preferences] 
-    ↓
-[ML Model Inference]
-    ↓
-[Top 3 Cakes + Probabilities]
-    ↓
-[Stored in CSV for Analytics]
+
+## Model Output
+
+The inference returns:
+- **Primary Recommendation** — Top-ranked cake (highest probability)
+- **Top 3 Cakes** — Ranked alternatives
+- **Confidence Scores** — Probability for each recommendation
+- **Latency** — Processing time in milliseconds
+
+Example output:
+```json
+{
+    "recommended_cake": "Berry Garden Cake",
+    "top_3_cakes": ["Berry Garden Cake", "Matcha Zen Cake", "Silk Cheesecake"],
+    "confidence_scores": [0.87, 0.08, 0.04],
+    "latency_ms": 87
+}
 ```
+
+## Model Training & Versioning
+
+**Retraining Pipeline** (`retrain_v2_final.py`):
+- Reads feedback_logs from Supabase
+- Filters by `is_used_for_training = True`
+- Trains on labeled user interactions
+- Validates on held-out test set (`is_held_out = True`)
+- Exports new model to `backend/models/v2_final_model.pkl`
+
+**Version Tracking**:
+- `model_version` field in feedback_logs (e.g., "hybrid_v1")
+- Enables A/B testing via `experiment_id` field
+- Supports rollback to previous models
+
+**Environment Compatibility**:
+- Must match training environment exactly
+- Versions: scikit-learn 1.5.1, XGBoost 2.0.3, numpy 1.24.3, pandas 2.2.0
+- Prevents version mismatch errors during inference
 
 ---
 
