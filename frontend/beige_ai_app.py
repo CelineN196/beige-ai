@@ -16,9 +16,13 @@ Features:
 # � DEBUG MODE TOGGLE - SET TO False FOR PRODUCTION (MUST BE FIRST)
 # ============================================================================
 # Initialize debug mode and logging BEFORE any other prints
-from dotenv import load_dotenv
-import os
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
+except ImportError:
+    import os
+    # python-dotenv not available - environment variables must be set manually
 import sys
 import logging
 

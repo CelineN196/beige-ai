@@ -26,11 +26,15 @@ Usage:
 import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
-from dotenv import load_dotenv
-from supabase import create_client
 
-# Load environment variables
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # python-dotenv not available - environment variables must be set manually
+    pass
+
+from supabase import create_client
 
 
 class Analytics:

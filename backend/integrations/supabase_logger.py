@@ -15,9 +15,13 @@ Key Features:
 - Async support for high-throughput scenarios
 """
 
-from dotenv import load_dotenv
-import os
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
+except ImportError:
+    import os
+    # python-dotenv not available - environment variables must be set manually
 
 import json
 import logging
