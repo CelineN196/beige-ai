@@ -18,8 +18,8 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend.inference import predict_cake
-from backend.api import CakeRecommendationAPI
+from backend.services.inference import predict_cake
+from backend.services.api import CakeRecommendationAPI
 import json
 from typing import List, Dict, Any
 

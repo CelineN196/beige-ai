@@ -15,7 +15,10 @@ Key Features:
 - Async support for high-throughput scenarios
 """
 
+from dotenv import load_dotenv
 import os
+load_dotenv()
+
 import json
 import logging
 import time
@@ -108,6 +111,7 @@ class FeedbackLog:
     # Optional fields
     user_id: Optional[str] = None
     recommended_cakes_top_3: Optional[list] = None
+    recommendation_match: str = "unknown"  # 'match', 'did_not_match', 'unknown'
     user_feedback: Optional[int] = None
     feedback_notes: Optional[str] = None
     latency_ms: Optional[int] = None
@@ -131,8 +135,15 @@ class FeedbackLog:
         if not self.user_input or not isinstance(self.user_input, dict):
             return False, "user_input is required and must be a dict"
         
-        if not self.recommended_cake or not isinstance(self.recommended_cake, str):
-            return False, "recommended_cake is required and must be a string"
+        # recommended_cake: allow string, warn on non-string but don't fail validation
+        # The string conversion happens in log_feedback before FeedbackLog is created
+        if not self.recommended_cake:
+            logger.warning("⚠️ recommended_cake is empty or None - will use 'unknown' as fallback")
+        elif not isinstance(self.recommended_cake, str):
+            logger.warning(
+                f"⚠️ recommended_cake is type {type(self.recommended_cake).__name__} not str. "
+                f"This should have been converted upstream in log_checkout_order()"
+            )
         
         if not self.context or not isinstance(self.context, dict):
             return False, "context is required and must be a dict"
@@ -178,6 +189,7 @@ def log_feedback(
     model_version: Optional[str] = None,
     user_id: Optional[str] = None,
     recommended_cakes_top_3: Optional[list] = None,
+    recommendation_match: str = "unknown",
     max_retries: int = 2,
 ) -> bool:
     """
@@ -214,6 +226,47 @@ def log_feedback(
     if model_version is None:
         model_version = CURRENT_MODEL_VERSION
     
+    # SAFETY: Ensure recommended_cake is always a string
+    # Handle dict (e.g., full AI result), list, None, or non-string types
+    if isinstance(recommended_cake, dict):
+        # Extract first cake name from dict if it has 'top_3_cakes'
+        if "top_3_cakes" in recommended_cake and isinstance(recommended_cake.get("top_3_cakes"), list):
+            cakes = recommended_cake["top_3_cakes"]
+            if cakes:
+                recommended_cake = str(cakes[0])
+            else:
+                recommended_cake = "unknown"
+        else:
+            # Serialize dict to JSON string
+            try:
+                recommended_cake = json.dumps(recommended_cake, ensure_ascii=False)[:200]
+            except Exception as e:
+                logger.warning(f"Failed to serialize dict recommendation: {e}")
+                recommended_cake = "unknown"
+    
+    elif isinstance(recommended_cake, list):
+        # Take first element from list
+        if recommended_cake:
+            recommended_cake = str(recommended_cake[0])
+        else:
+            recommended_cake = "unknown"
+    
+    elif recommended_cake is None:
+        recommended_cake = "unknown"
+    
+    elif not isinstance(recommended_cake, str):
+        # Other types: convert to string
+        try:
+            recommended_cake = str(recommended_cake)
+        except Exception as e:
+            logger.warning(f"Failed to convert recommended_cake to string: {e}")
+            recommended_cake = "unknown"
+    
+    # Ensure string is not empty
+    if not recommended_cake or recommended_cake.strip() == "":
+        logger.warning("recommended_cake is empty after conversion - using 'unknown'")
+        recommended_cake = "unknown"
+    
     # Create feedback log entry
     log_entry = FeedbackLog(
         session_id=session_id,
@@ -223,6 +276,7 @@ def log_feedback(
         model_version=model_version,
         user_id=user_id,
         recommended_cakes_top_3=recommended_cakes_top_3,
+        recommendation_match=recommendation_match,
         user_feedback=user_feedback,
         feedback_notes=feedback_notes,
         latency_ms=latency_ms,
@@ -247,7 +301,7 @@ def log_feedback(
     # Convert entry to dict and prepare for insertion
     log_dict = asdict(log_entry)
     
-    # Retry logic
+    # Retry logic with fallback for missing column
     for attempt in range(max_retries + 1):
         try:
             # Insert into Supabase
@@ -260,14 +314,49 @@ def log_feedback(
             return True
             
         except Exception as e:
+            error_str = str(e)
+            error_type = type(e).__name__
+            
             logger.error(
-                f"❌ Attempt {attempt + 1}/{max_retries + 1} failed: {str(e)}"
+                f"❌ Attempt {attempt + 1}/{max_retries + 1} failed: {error_type}: {error_str}"
             )
+            
+            # Debug: Log RLS failure indicators
+            if "policy" in error_str.lower() or "permission" in error_str.lower() or "rls" in error_str.lower():
+                logger.error(
+                    f"   🔒 RLS POLICY ISSUE DETECTED. Check Supabase RLS policies on feedback_logs table."
+                )
+                logger.error(
+                    f"   📋 Payload size: {len(str(log_dict))} bytes"
+                )
+                logger.error(
+                    f"   👤 Session: {session_id}, User: {user_id}"
+                )
+            
+            # Fallback: if column not found, remove recommendation_match and retry
+            if "recommendation_match" in error_str.lower() and "could not find" in error_str.lower():
+                logger.warning(
+                    f"   🔄 FALLBACK: 'recommendation_match' column not found in database."
+                )
+                logger.warning(
+                    f"   💡 Please run this SQL in Supabase to add the column:"
+                )
+                logger.warning(
+                    f"      ALTER TABLE feedback_logs ADD COLUMN recommendation_match TEXT DEFAULT 'unknown';"
+                )
+                
+                # Remove the problematic field and retry
+                if "recommendation_match" in log_dict:
+                    log_dict.pop("recommendation_match")
+                    logger.warning(
+                        f"   🔁 Retrying insert WITHOUT recommendation_match field..."
+                    )
+                    continue
             
             if attempt < max_retries:
                 # Exponential backoff: 1s, 2s, etc.
                 wait_time = 2 ** attempt
-                logger.info(f"   Retrying in {wait_time}s...")
+                logger.info(f"   ⏳ Retrying in {wait_time}s...")
                 time.sleep(wait_time)
             else:
                 logger.error(f"❌ Failed to log feedback after {max_retries + 1} attempts")
@@ -408,6 +497,9 @@ def get_model_version_info() -> Dict[str, str]:
         "set_at": datetime.now(timezone.utc).isoformat(),
         "type": "hybrid_ml",  # or 'rule_based', 'neural', etc.
     }
+
+def get_or_create_session_id() -> str:
+    return str(uuid.uuid4())
 
 # ============================================================================
 # EXAMPLE USAGE

@@ -13,7 +13,7 @@ The inference pipeline loads the trained XGBoost model and provides real-time ca
 ### Basic Usage
 
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 
 # User input with 10 features
 user_input = {
@@ -172,7 +172,7 @@ Features are arranged in the exact order expected by the trained model (29 total
 ```python
 # In your Flask/FastAPI app
 from flask import Flask, request, jsonify
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 
 app = Flask(__name__)
 
@@ -190,7 +190,7 @@ def recommend():
 ### Example 2: Batch Prediction
 
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 import pandas as pd
 
 # Load user data
@@ -211,7 +211,7 @@ results_df.to_csv('recommendations.csv', index=False)
 ### Example 3: Real-time Recommendations
 
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 from datetime import datetime
 import os
 

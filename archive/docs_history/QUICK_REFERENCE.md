@@ -7,7 +7,7 @@
 ## ⚡ 30-Second Setup
 
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 
 result = predict_cake({
     'mood': 'Happy',
@@ -83,7 +83,7 @@ print(result['top_prediction'])  # "Korean Sesame Mini Bread"
 
 ### Pattern 1: Single Prediction
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 result = predict_cake(user_input)
 ```
 
@@ -94,7 +94,7 @@ results = [predict_cake(user) for user in users]
 
 ### Pattern 3: REST API (Flask)
 ```python
-from backend.api import create_flask_app
+from backend.services.api import create_flask_app
 app = create_flask_app()
 app.run(port=5000)
 ```
@@ -106,7 +106,7 @@ uvicorn backend.api:app --reload
 
 ### Pattern 5: API Wrapper with Validation
 ```python
-from backend.api import CakeRecommendationAPI
+from backend.services.api import CakeRecommendationAPI
 api = CakeRecommendationAPI()
 result = api.recommend(request_data)
 ```
@@ -136,7 +136,7 @@ else:
 
 ### Flask (Simple)
 ```bash
-python -c "from backend.api import create_flask_app; app = create_flask_app(); app.run()"
+python -c "from backend.services.api import create_flask_app; app = create_flask_app(); app.run()"
 ```
 
 ### FastAPI (Modern)
@@ -222,7 +222,7 @@ Before using in production:
 
 - [ ] Model files exist in `backend/models/`
 - [ ] All dependencies installed: `pip install -r backend/training/requirements.txt`
-- [ ] Can import: `from backend.inference import predict_cake`
+- [ ] Can import: `from backend.services.inference import predict_cake`
 - [ ] Examples run: `python examples/cake_recommendation_examples.py`
 - [ ] Health check works: `api.health_check()`
 

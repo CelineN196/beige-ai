@@ -335,7 +335,7 @@ python test_supabase_v2_connection.py
 ### Test 4: Logging
 ```bash
 # From your code
-from backend.supabase_logger import log_feedback
+from backend.integrations.supabase_logger import log_feedback
 
 success = log_feedback(
     session_id="test_123",
@@ -367,7 +367,7 @@ print(f"✅ Logged: {success}")
 
 4. **Integrate into app**:
    - The Streamlit app code needs no changes
-   - Just ensure `from backend.supabase_logger import log_feedback` is accessible
+   - Just ensure `from backend.integrations.supabase_logger import log_feedback` is accessible
 
 5. **Test logging**:
    - Generate a recommendation

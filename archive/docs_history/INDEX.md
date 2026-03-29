@@ -221,7 +221,7 @@ python examples/cake_recommendation_examples.py
 
 ### Step 3: Try It Yourself (5 min)
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 result = predict_cake({
     'mood': 'Happy',
     'weather_condition': 'Sunny',
@@ -234,7 +234,7 @@ print(result['top_prediction'])
 
 **Option A: Flask API** (5 min)
 ```bash
-python -c "from backend.api import create_flask_app; app = create_flask_app(); app.run()"
+python -c "from backend.services.api import create_flask_app; app = create_flask_app(); app.run()"
 ```
 
 **Option B: FastAPI** (5 min)

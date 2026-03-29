@@ -1569,7 +1569,7 @@ pip install flask gunicorn
 ##### Create `run_flask_api.py`
 
 ```python
-from backend.api import create_flask_app
+from backend.services.api import create_flask_app
 
 if __name__ == "__main__":
     app = create_flask_app()
@@ -1626,7 +1626,7 @@ pip install fastapi uvicorn
 ##### Create `run_fastapi_api.py`
 
 ```python
-from backend.api import create_fastapi_app
+from backend.services.api import create_fastapi_app
 
 app = create_fastapi_app()
 
@@ -2134,7 +2134,7 @@ The inference pipeline loads the trained XGBoost model and provides real-time ca
 #### Basic Usage
 
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 
 # User input with 10 features
 user_input = {
@@ -2293,7 +2293,7 @@ Features are arranged in the exact order expected by the trained model (29 total
 ```python
 # In your Flask/FastAPI app
 from flask import Flask, request, jsonify
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 
 app = Flask(__name__)
 
@@ -2311,7 +2311,7 @@ def recommend():
 #### Example 2: Batch Prediction
 
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 import pandas as pd
 
 # Load user data
@@ -2332,7 +2332,7 @@ results_df.to_csv('recommendations.csv', index=False)
 #### Example 3: Real-time Recommendations
 
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 from datetime import datetime
 import os
 
@@ -2675,7 +2675,7 @@ response = model.generate_content(
 To use with OpenAI, Anthropic, or other providers:
 
 ```python
-from backend.concierge_system_prompt import get_concierge_prompt
+from backend.config.concierge_system_prompt import get_concierge_prompt
 
 # For other LLM providers (OpenAI, etc.)
 messages = [
@@ -2693,7 +2693,7 @@ response = client.chat.completions.create(
 For testing or documentation:
 
 ```python
-from backend.concierge_system_prompt import (
+from backend.config.concierge_system_prompt import (
     get_concierge_recommendation_template,
     CONCIERGE_SYSTEM_PROMPT
 )
@@ -2853,7 +2853,7 @@ Then:
 #### Validation Script
 
 ```python
-from backend.concierge_system_prompt import get_concierge_recommendation_template
+from backend.config.concierge_system_prompt import get_concierge_recommendation_template
 import json
 
 template = get_concierge_recommendation_template()

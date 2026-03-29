@@ -20,14 +20,120 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 import logging
 
-from backend.supabase_logger import (
+from backend.integrations.supabase_logger import (
     log_feedback,
     get_session_id,
     get_model_version_info,
     CURRENT_MODEL_VERSION,
 )
 
+import json
+
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
+def _safe_stringify_recommendation(value: Any) -> str:
+    """
+    Safely convert any recommendation value to a string.
+    
+    Handles:
+    - str: returned as-is
+    - dict: tries to extract 'top_3_cakes' first, else serializes to JSON
+    - list: returns first element or "unknown"
+    - None: converted to "unknown"
+    - other: converted using str()
+    
+    Args:
+        value: Any type to convert
+    
+    Returns:
+        str: Safe string representation
+    """
+    if isinstance(value, str):
+        # Already string - ensure it's not empty
+        return value if value else "unknown"
+    
+    elif isinstance(value, dict):
+        # Handle AI result dict from session_state
+        if "top_3_cakes" in value and isinstance(value.get("top_3_cakes"), list):
+            cakes = value["top_3_cakes"]
+            if cakes:
+                return str(cakes[0])
+        
+        # Fallback: serialize to JSON
+        try:
+            serialized = json.dumps(value, ensure_ascii=False)
+            return serialized[:200]  # Limit to 200 chars for storage
+        except Exception as e:
+            logger.warning(f"Failed to serialize dict recommendation: {e}")
+            return "unknown_recommendation"
+    
+    elif isinstance(value, list):
+        # If list of cakes, take first one
+        if value and len(value) > 0:
+            return str(value[0])
+        return "unknown"
+    
+    elif value is None:
+        return "unknown"
+    
+    else:
+        # Fallback: convert any other type
+        try:
+            result = str(value) if value else "unknown"
+            return result if result else "unknown"
+        except:
+            return "unknown"
+
+def _compute_recommendation_match(
+    recommended_cake: str,
+    purchased_items: list,
+) -> str:
+    """
+    Compute whether the recommended cake matches purchased items.
+    
+    Args:
+        recommended_cake: The recommended cake name (string)
+        purchased_items: List of purchased items (list of dicts with 'name' key, or list of strings)
+    
+    Returns:
+        str: "match", "did_not_match", or "unknown"
+    """
+    # Normalize recommended cake
+    if not recommended_cake or recommended_cake == "unknown":
+        return "unknown"
+    
+    rec_normalized = str(recommended_cake).strip().lower()
+    
+    # Handle empty purchase list
+    if not purchased_items or len(purchased_items) == 0:
+        return "unknown"
+    
+    # Extract cake names from purchased items
+    purchased_names = []
+    for item in purchased_items:
+        if isinstance(item, dict):
+            # Cart items are dicts with 'name' key
+            name = item.get('name', '')
+        else:
+            # Or could be strings
+            name = str(item)
+        
+        if name:
+            purchased_names.append(name.strip().lower())
+    
+    # If no valid purchased names, unknown
+    if not purchased_names:
+        return "unknown"
+    
+    # Check if recommended cake is in purchased items
+    if rec_normalized in purchased_names:
+        return "match"
+    else:
+        return "did_not_match"
 
 # ============================================================================
 # STREAMLIT SESSION STATE INITIALIZATION
@@ -218,7 +324,7 @@ def log_user_feedback(
         bool: True if logged
     """
     try:
-        from backend.supabase_logger import FeedbackLog
+        from backend.integrations.supabase_logger import FeedbackLog
         
         # Create entry with just feedback update
         log_entry = FeedbackLog(
@@ -245,6 +351,88 @@ def log_user_feedback(
         
     except Exception as e:
         logger.error(f"❌ Error logging user feedback: {e}")
+        return False
+
+# ============================================================================
+# CHECKOUT ORDER LOGGING
+# ============================================================================
+
+def log_checkout_order(
+    order_id: str,
+    items_purchased: str,
+    ai_recommendation: Any,
+    match_result: str,
+    total_value: Optional[float] = None,
+    purchased_items: Optional[list] = None,
+) -> bool:
+    """
+    Log a checkout order to Supabase.
+    
+    Called after successful checkout to record purchase data.
+    This bridges recommendation logging and actual purchase behavior.
+    
+    Args:
+        order_id: Unique order ID (UUID)
+        items_purchased: Comma-separated cake names purchased
+        ai_recommendation: The recommended cake from AI (str, dict, list, or any type - will be converted)
+        match_result: "Match" if recommendation was purchased, "Not Quite" otherwise
+        total_value: Optional total order value
+        purchased_items: List of purchased items (dicts with 'name' key) for detailed matching
+    
+    Returns:
+        bool: True if logged successfully
+    """
+    session_id = get_or_create_session_id()
+    
+    try:
+        # Convert ai_recommendation to string safely
+        cake_str = _safe_stringify_recommendation(ai_recommendation)
+        
+        logger.debug(
+            f"Checkout order: ai_recommendation type={type(ai_recommendation).__name__}, "
+            f"converted to: {cake_str[:60]}..."
+        )
+        
+        # Compute recommendation_match
+        recommendation_match = _compute_recommendation_match(
+            recommended_cake=cake_str,
+            purchased_items=purchased_items or [],
+        )
+        
+        logger.debug(
+            f"Recommendation match: recommended='{cake_str}', "
+            f"purchased_count={len(purchased_items) if purchased_items else 0}, "
+            f"result='{recommendation_match}'"
+        )
+        
+        # Log the order as a special feedback entry
+        success = log_feedback(
+            session_id=session_id,
+            user_input={
+                "order_id": order_id,
+                "items_purchased": items_purchased,
+                "match_result": match_result,
+                "total_value": total_value,
+            },
+            recommended_cake=cake_str,
+            context={
+                "checkout": True,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            feedback_notes=f"Checkout: {match_result} | Purchased: {items_purchased}",
+            model_version=CURRENT_MODEL_VERSION,
+            recommendation_match=recommendation_match,
+        )
+        
+        if success:
+            logger.info(f"✅ Checkout logged to Supabase [order={order_id}, result={match_result}]")
+        else:
+            logger.warning(f"⚠️ Failed to log checkout to Supabase [order={order_id}]")
+        
+        return success
+        
+    except Exception as e:
+        logger.error(f"❌ Error logging checkout: {e}")
         return False
 
 # ============================================================================
@@ -281,7 +469,7 @@ USAGE IN YOUR STREAMLIT APP:
 
 In frontend/beige_ai_app.py, after getting recommendations:
 
-    from backend.supabase_integration import (
+    from backend.integrations.supabase_integration import (
         init_feedback_session_state,
         log_recommendation,
         show_feedback_form,

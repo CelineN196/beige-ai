@@ -22,7 +22,6 @@ CREATE TABLE IF NOT EXISTS feedback_logs (
     user_input JSONB NOT NULL,                     -- Full user input (mood, weather, preferences, etc.)
     recommended_cake TEXT NOT NULL,                -- Primary recommendation
     recommended_cakes_top_3 TEXT[] DEFAULT NULL,   -- Alternative recommendations
-    recommendation_match TEXT DEFAULT 'unknown',   -- 'match', 'did_not_match', or 'unknown'
     
     -- User Feedback
     user_feedback INTEGER CHECK (user_feedback BETWEEN 1 AND 5),  -- 1=Poor, 5=Excellent
@@ -186,23 +185,15 @@ ALTER TABLE feedback_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE model_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE experiments ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies: Allow public (anon) writes for now
--- In production, require auth.uid() or service role
+-- Create policy for authenticated users (example)
+-- Note: Customize based on your auth setup
+-- CREATE POLICY "Enable read for authenticated users"
+--   ON feedback_logs FOR SELECT
+--   USING (auth.role() = 'authenticated');
 
--- Allow anyone to insert feedback (audit trail via session_id)
-CREATE POLICY "Enable insert for all users"
-  ON feedback_logs FOR INSERT
-  WITH CHECK (TRUE);
-
--- Allow authenticated users to read their own session data
-CREATE POLICY "Enable read for authenticated users"
-  ON feedback_logs FOR SELECT
-  USING (auth.role() = 'authenticated');
-
--- Allow public read access (for dashboards)
-CREATE POLICY "Enable read for public"
-  ON feedback_logs FOR SELECT
-  USING (TRUE);
+-- CREATE POLICY "Enable insert for authenticated users"
+--   ON feedback_logs FOR INSERT
+--   WITH CHECK (auth.role() = 'authenticated');
 
 -- ============================================================================
 -- SEEDING: Initial Model Versions

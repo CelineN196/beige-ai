@@ -151,7 +151,7 @@ response = model.generate_content(
 To use with OpenAI, Anthropic, or other providers:
 
 ```python
-from backend.concierge_system_prompt import get_concierge_prompt
+from backend.config.concierge_system_prompt import get_concierge_prompt
 
 # For other LLM providers (OpenAI, etc.)
 messages = [
@@ -169,7 +169,7 @@ response = client.chat.completions.create(
 For testing or documentation:
 
 ```python
-from backend.concierge_system_prompt import (
+from backend.config.concierge_system_prompt import (
     get_concierge_recommendation_template,
     CONCIERGE_SYSTEM_PROMPT
 )
@@ -329,7 +329,7 @@ Then:
 ### Validation Script
 
 ```python
-from backend.concierge_system_prompt import get_concierge_recommendation_template
+from backend.config.concierge_system_prompt import get_concierge_recommendation_template
 import json
 
 template = get_concierge_recommendation_template()

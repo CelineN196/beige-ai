@@ -21,7 +21,7 @@ pip install flask gunicorn
 #### Create `run_flask_api.py`
 
 ```python
-from backend.api import create_flask_app
+from backend.services.api import create_flask_app
 
 if __name__ == "__main__":
     app = create_flask_app()
@@ -78,7 +78,7 @@ pip install fastapi uvicorn
 #### Create `run_fastapi_api.py`
 
 ```python
-from backend.api import create_fastapi_app
+from backend.services.api import create_fastapi_app
 
 app = create_fastapi_app()
 

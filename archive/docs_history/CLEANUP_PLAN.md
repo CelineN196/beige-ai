@@ -338,7 +338,7 @@ Before executing any commands:
 
 - [ ] **Import Tests**
   ```bash
-  python -c "from backend.menu_config import CAKE_MENU; print(len(CAKE_MENU))"
+  python -c "from backend.config.menu_config import CAKE_MENU; print(len(CAKE_MENU))"
   # Should print: 8
   ```
 

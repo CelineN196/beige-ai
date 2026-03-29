@@ -15,7 +15,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime

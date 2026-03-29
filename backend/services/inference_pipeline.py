@@ -17,7 +17,7 @@ import numpy as np
 from typing import Tuple, Dict, Any, List
 import sys
 
-from backend.feature_contract import (
+from backend.config.feature_contract import (
     CATEGORICAL_FEATURES,
     NUMERICAL_FEATURES,
     CATEGORICAL_VALUES,

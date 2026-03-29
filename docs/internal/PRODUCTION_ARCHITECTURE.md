@@ -398,7 +398,7 @@ Loading Status:
 ### 9.1 Check Model Version at Runtime
 
 ```python
-from backend.model_loader import get_model_status
+from backend.services.model_loader import get_model_status
 status = get_model_status()
 print(status)
 # {
@@ -414,7 +414,7 @@ print(status)
 ### 9.2 Validate Feature Schema
 
 ```python
-from backend.feature_contract import validate_feature_order, ALL_FEATURES
+from backend.config.feature_contract import validate_feature_order, ALL_FEATURES
 is_valid, msg = validate_feature_order(df.columns.tolist())
 print(f"{is_valid}: {msg}")  # ✓ Feature order valid
 ```
@@ -422,7 +422,7 @@ print(f"{is_valid}: {msg}")  # ✓ Feature order valid
 ### 9.3 Test Inference Pipeline
 
 ```python
-from backend.inference_pipeline import InferencePipeline
+from backend.services.inference_pipeline import InferencePipeline
 pipeline = InferencePipeline(model, preprocessor, label_encoder, verbose=True)
 
 result = pipeline.predict_with_explanations({

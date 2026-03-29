@@ -141,7 +141,7 @@
 
 ✅ **Flask Integration** - Ready to run:
 ```bash
-python -c "from backend.api import create_flask_app; app = create_flask_app(); app.run()"
+python -c "from backend.services.api import create_flask_app; app = create_flask_app(); app.run()"
 ```
 
 ✅ **FastAPI Integration** - Ready to run:

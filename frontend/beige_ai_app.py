@@ -16,7 +16,9 @@ Features:
 # � DEBUG MODE TOGGLE - SET TO False FOR PRODUCTION (MUST BE FIRST)
 # ============================================================================
 # Initialize debug mode and logging BEFORE any other prints
+from dotenv import load_dotenv
 import os
+load_dotenv()
 import sys
 import logging
 
@@ -27,7 +29,7 @@ logger = logging.getLogger("Beige AI")
 logger.setLevel(logging.INFO if not DEBUG else logging.DEBUG)
 
 # ============================================================================
-# 🚀 ENTRY POINT ENFORCEMENT - SINGLE FRONTEND ENTRY
+# ENTRY POINT ENFORCEMENT - SINGLE FRONTEND ENTRY
 # ============================================================================
 # This file MUST be the ONLY Streamlit entry point. Fail immediately if not.
 if DEBUG:
@@ -56,6 +58,21 @@ from pathlib import Path
 import google.generativeai as genai
 import uuid
 import csv
+import time
+
+# ============================================================================
+# 🔗 SUPABASE FEEDBACK LOGGING IMPORTS
+# ============================================================================
+from backend.integrations.supabase_integration import (
+    init_feedback_session_state,
+    log_recommendation,
+    show_feedback_form,
+    log_user_feedback,
+    log_checkout_order,
+    show_session_info,
+    show_model_info,
+)
+from backend.integrations.supabase_logger import get_or_create_session_id
 
 # menu_config.py is now in the same directory (frontend/)
 # No sys.path hacking needed for local imports
@@ -185,6 +202,12 @@ if 'micro_story' not in st.session_state:
 if 'analyst_mode' not in st.session_state:
     st.session_state.analyst_mode = False
 
+# ============================================================================
+# 🔗 SUPABASE FEEDBACK SESSION STATE INITIALIZATION
+# ============================================================================
+# Initialize feedback session state (once at startup)
+init_feedback_session_state()
+
 # ML Pipeline initializes automatically on import - no manual session init needed
 
 # ============================================================================
@@ -286,6 +309,20 @@ if st.session_state.analyst_mode:
     st.sidebar.success("✓ Analyst Mode Enabled")
 else:
     st.session_state.analyst_mode = False
+
+# ============================================================================
+# 🔗 SUPABASE FEEDBACK MONITORING (SIDEBAR)
+# ============================================================================
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🔗 Feedback Logging")
+
+# Show session info in sidebar (safe for non-blocking display)
+try:
+    show_session_info()
+    show_model_info()
+except Exception as sidebar_error:
+    if DEBUG:
+        st.sidebar.warning(f"⚠️ Could not display session info: {str(sidebar_error)}")
 
 def get_current_time(timezone_str="Asia/Ho_Chi_Minh"):
     """
@@ -1377,6 +1414,36 @@ def display_ai_recommendations():
     """, unsafe_allow_html=True)
     
     st.markdown("<br><br>", unsafe_allow_html=True)
+    
+    # ============================================================================
+    # 🔗 SUPABASE FEEDBACK COLLECTION
+    # ============================================================================
+    st.markdown("""
+        <div class='insight-section'>
+    """, unsafe_allow_html=True)
+    
+    # Show feedback form - collects user rating (1-5 stars)
+    feedback = show_feedback_form(top_3_cakes[0])
+    if feedback:
+        try:
+            log_success = log_user_feedback(
+                session_id=st.session_state.session_id,
+                recommended_cake=top_3_cakes[0],
+                feedback_dict=feedback,
+            )
+            if log_success:
+                st.success("✨ Thanks for your feedback! It helps us improve.")
+            else:
+                st.info("💾 Feedback saved locally (connection issue)")
+                if DEBUG:
+                    logger.debug("Local feedback saved due to connection issue")
+        except Exception as feedback_error:
+            st.info("💾 Feedback saved locally")
+            if DEBUG:
+                logger.error(f"Error logging feedback: {str(feedback_error)}")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
 
 def display_checkout():
     """Display checkout page."""
@@ -1468,6 +1535,25 @@ def display_checkout():
                         if save_success:
                             # Success: Mark as logged and show confirmation
                             st.session_state.order_logged = True
+                            
+                            # ================================================
+                            # Log order to Supabase for analytics
+                            # ================================================
+                            supabase_logged = log_checkout_order(
+                                order_id=order_id,
+                                items_purchased=items_purchased,
+                                ai_recommendation=st.session_state.ai_result,
+                                match_result=result,
+                                total_value=subtotal,
+                                purchased_items=st.session_state.cart,
+                            )
+                            
+                            if DEBUG:
+                                if supabase_logged:
+                                    logger.info(f"✅ Order logged to Supabase: {order_id}")
+                                else:
+                                    logger.warning(f"⚠️ Supabase logging failed (order still saved locally): {order_id}")
+                            
                             st.success(f"🎉 Order confirmed! Thank you for your purchase.\n\nOrder ID: {order_id}")
                             
                             # DEBUG MODE: Show last 3 rows of feedback log
@@ -1788,6 +1874,9 @@ else:  # Store page
             # 3-layer: Behavioral Segmentation → Classification → Ranking
             # ================================================================
             
+            # 🔗 START TIMING FOR LATENCY TRACKING
+            inference_start = time.time()
+            
             try:
                 # Prepare user input for ML pipeline
                 pipeline_input = {
@@ -1813,6 +1902,9 @@ else:  # Store page
                 top_3_cakes = result['top_3_cakes']
                 top_3_scores = result['top_3_scores']
                 cluster_id = result.get('cluster_id')
+                
+                # 🔗 CALCULATE LATENCY (in milliseconds)
+                latency_ms = int((time.time() - inference_start) * 1000)
                 
                 # Create probabilities array for display compatibility
                 probabilities = np.zeros(len(CAKE_CLASSES))
@@ -1851,6 +1943,16 @@ else:  # Store page
             # Rename for consistency with rest of codebase
             top_3_probs = top_3_scores
             
+            # 🔗 PREPARE ML METADATA FOR LOGGING
+            confidence_score = float(top_3_probs[0]) if top_3_probs[0] > 0 else 0.5
+            ml_features = {
+                "cluster": int(cluster_id) if cluster_id is not None else None,
+                "mood": mood,
+                "weather": st.session_state.weather_condition,
+                "sweetness": sweetness_preference,
+                "health": health_preference,
+            }
+            
             # Save to session state
             st.session_state.ai_result = {
                 'top_3_cakes': top_3_cakes,
@@ -1861,9 +1963,38 @@ else:  # Store page
                 'time_of_day': st.session_state.time_of_day,
                 'model_version': ML_VERSION,
                 'prediction_source': prediction_source,
-                'engine_type': engine_type  # Store engine classification
+                'engine_type': engine_type,  # Store engine classification
+                'latency_ms': latency_ms,  # Store latency for logging
+                'confidence_score': confidence_score,  # Store confidence for logging
+                'cluster_id': cluster_id,  # Store cluster ID for logging
+                'ml_features': ml_features  # Store ML features for logging
             }
             st.session_state.has_generated = True
+            
+            # 🔗 LOG RECOMMENDATION TO SUPABASE (NON-BLOCKING)
+            try:
+                log_success = log_recommendation(
+                    recommended_cake=top_3_cakes[0],
+                    top_3_cakes=top_3_cakes,
+                    latency_ms=latency_ms,
+                    confidence_score=confidence_score,
+                    cluster_id=cluster_id,
+                    ml_features=ml_features,
+                    user_input=pipeline_input,
+                    additional_context={
+                        "weather": st.session_state.weather_condition,
+                        "mood": mood,
+                        "temperature": temperature_celsius,
+                        "humidity": humidity,
+                        "time_of_day": st.session_state.time_of_day,
+                    },
+                )
+                if DEBUG:
+                    logger.debug(f"Recommendation logged: {log_success}")
+            except Exception as logging_error:
+                # Silently fail - don't break the UX if logging fails
+                if DEBUG:
+                    logger.error(f"Failed to log recommendation: {str(logging_error)}")
             
             # Generate micro-story based on recommendation
             st.session_state.micro_story = generate_micro_story(

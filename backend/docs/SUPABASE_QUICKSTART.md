@@ -70,7 +70,7 @@ Verify:
 """
 Add these imports at top of frontend/beige_ai_app.py:
 
-    from backend.supabase_integration import (
+    from backend.integrations.supabase_integration import (
         init_feedback_session_state,
         log_recommendation,
         show_feedback_form,
@@ -78,7 +78,7 @@ Add these imports at top of frontend/beige_ai_app.py:
         show_session_info,
         show_model_info,
     )
-    from backend.supabase_logger import get_or_create_session_id
+    from backend.integrations.supabase_logger import get_or_create_session_id
     import time  # for latency measurement
 
 Add to main() function, right after @st.cache_resource (if any):
@@ -166,8 +166,8 @@ Save as test_supabase_integration.py:
 import sys
 sys.path.insert(0, '/Users/queenceline/Downloads/Beige AI')
 
-from backend.supabase_logger import log_feedback, get_session_id
-from backend.supabase_integration import log_recommendation
+from backend.integrations.supabase_logger import log_feedback, get_session_id
+from backend.integrations.supabase_integration import log_recommendation
 from datetime import datetime
 import time
 

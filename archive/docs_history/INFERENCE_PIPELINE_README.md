@@ -40,7 +40,7 @@ pip install -r backend/training/requirements.txt
 ### 2. Basic Usage
 
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 
 user_input = {
     'mood': 'Happy',
@@ -170,7 +170,7 @@ Output includes:
 
 **Example**:
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 
 result = predict_cake(user_input)
 # Returns dict with: top_prediction, confidence, explanation, top_3
@@ -189,7 +189,7 @@ result = predict_cake(user_input)
 
 **Example**:
 ```python
-from backend.api import CakeRecommendationAPI
+from backend.services.api import CakeRecommendationAPI
 
 api = CakeRecommendationAPI()
 result = api.recommend(user_input)
@@ -215,7 +215,7 @@ Includes:
 ### Pattern 1: Direct Python Usage
 
 ```python
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 
 result = predict_cake(user_input)
 ```
@@ -228,7 +228,7 @@ result = predict_cake(user_input)
 
 ```bash
 python -c "
-from backend.api import create_flask_app
+from backend.services.api import create_flask_app
 app = create_flask_app()
 app.run(host='0.0.0.0', port=5000)
 "
@@ -263,7 +263,7 @@ FROM python:3.9
 WORKDIR /app
 COPY . .
 RUN pip install -r backend/training/requirements.txt
-CMD ["python", "-c", "from backend.api import create_flask_app; app = create_flask_app(); app.run()"]
+CMD ["python", "-c", "from backend.services.api import create_flask_app; app = create_flask_app(); app.run()"]
 ```
 
 **Use when**: Cloud deployment, containerized environments
@@ -274,7 +274,7 @@ CMD ["python", "-c", "from backend.api import create_flask_app; app = create_fla
 
 ```python
 import pandas as pd
-from backend.inference import predict_cake
+from backend.services.inference import predict_cake
 
 users = pd.read_csv('users.csv')
 recommendations = [predict_cake(row.to_dict()) for _, row in users.iterrows()]
@@ -477,7 +477,7 @@ python examples/cake_recommendation_examples.py
 **Or deploy as API:**
 ```bash
 pip install flask
-python -c "from backend.api import create_flask_app; app = create_flask_app(); app.run()"
+python -c "from backend.services.api import create_flask_app; app = create_flask_app(); app.run()"
 ```
 
 **Questions?** Check the full documentation in `/docs/` folder.

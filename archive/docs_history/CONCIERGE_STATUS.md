@@ -162,7 +162,7 @@ UI Display
 #### Using in Python Code
 
 ```python
-from backend.concierge_system_prompt import CONCIERGE_SYSTEM_PROMPT
+from backend.config.concierge_system_prompt import CONCIERGE_SYSTEM_PROMPT
 import google.generativeai as genai
 
 model = genai.GenerativeModel(
@@ -182,7 +182,7 @@ response = model.generate_content(
 #### Using with Other LLMs
 
 ```python
-from backend.concierge_system_prompt import get_concierge_prompt
+from backend.config.concierge_system_prompt import get_concierge_prompt
 
 # OpenAI example
 messages = [
