@@ -86,7 +86,7 @@ def plot_feature_importance():
     Generate feature importance chart from XGBoost model.
     
     Loads model from available model path
-    Shows top 10 most important features.
+    Shows top 10 most important features with actual feature names.
     """
     # Check if model exists
     if MODEL_PATH is None or not MODEL_PATH.exists():
@@ -99,11 +99,13 @@ def plot_feature_importance():
         print(f"Loading model from {MODEL_PATH}...")
         model_data = joblib.load(MODEL_PATH)
         
-        # Extract model (handle both dict and direct model formats)
+        # Extract model and feature names
         if isinstance(model_data, dict):
             model = model_data.get('model')
+            feature_names = model_data.get('feature_names', None)
         else:
             model = model_data
+            feature_names = None
         
         if model is None:
             print("⚠️  Could not extract model from file")
@@ -116,26 +118,28 @@ def plot_feature_importance():
         
         importances = model.feature_importances_
         
-        # Generate feature names (13 features in production)
-        feature_names = [
-            'comfort_index',
-            'temperature_celsius',
-            'sweetness_preference',
-            'air_quality_index',
-            'humidity',
-            'environmental_score',
-            'health_preference',
-            'trend_popularity_score',
-            'mood',
-            'weather_condition',
-            'time_of_day',
-            'season',
-            'temperature_category'
-        ]
+        # Generate feature names if not available in model
+        if feature_names is None:
+            feature_names = [
+                'comfort_index',
+                'temperature_celsius',
+                'sweetness_preference',
+                'air_quality_index',
+                'humidity',
+                'environmental_score',
+                'health_preference',
+                'trend_popularity_score',
+                'mood',
+                'weather_condition',
+                'time_of_day',
+                'season',
+                'temperature_category'
+            ]
         
         # Handle case where we have more/fewer features than expected
         if len(importances) != len(feature_names):
-            print(f"⚠️  Feature count mismatch: model has {len(importances)} features, expected {len(feature_names)}")
+            print(f"⚠️  Feature count mismatch: model has {len(importances)} features, loaded {len(feature_names)} names")
+            print(f"    Using feature indices instead of names")
             feature_names = [f'Feature_{i}' for i in range(len(importances))]
         
         # Sort by importance
@@ -177,6 +181,7 @@ def plot_feature_importance():
         plt.close()
         
         print(f"✓ Saved: {output_file}")
+        print(f"  Features displayed: {top_features}")
         
     except Exception as e:
         print(f"⚠️  Error loading model: {e}")
