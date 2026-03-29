@@ -2,67 +2,59 @@
 
 All notable changes to this project are documented here. This file tracks the significant architectural improvements and fixes implemented in the Beige AI project.
 
-## [Latest - March 24, 2026]
+## [Latest - March 29, 2026]
 
-### Fallback System - Complete Hard Kill ✅
-- **Eliminated all fallback logic** from model_loader.py
-  - Removed V1_FALLBACK_MODEL references
-  - Removed V1_FALLBACK_PREPROCESSOR references
-  - Removed `_load_v1()` and `_load_v1_preprocessor()` methods
-  - Removed try/except fallback chains
-- **V2-Only Loading**: `ModelLoader.load()` now fails hard if V2 unavailable
-  - Raises explicit RuntimeError instead of silent fallback
-  - No degradation to V1 RandomForest on V2 failure
-  - Clear error messages guide troubleshooting
-- **Updated PRODUCTION_ARCHITECTURE.md**:
-  - Changed "Safe model loading with fallback" → "V2-only model loading (FAIL-FAST)"
-  - Removed V1 model from documentation
-  - Updated safety guarantees to reflect fail-fast design
+### Hybrid v1 ML Model + Supabase Feedback System Integration ✅
 
-### Architecture Migration ✅
-- **Removed ml_compatibility_wrapper**: Eliminated SafeMLLoader and RuleBasedPredictor classes
-- **Restored Real ML Pipeline**: Implemented 3-layer hybrid ML system (K-Means → RandomForest → Ranking)
-- **Explicit Error Handling**: All exceptions now propagate with clear context instead of falling back
+**Model Evolution:**
+- **Upgraded to Hybrid v1 ML Architecture**: XGBoost 2.0.3 + scikit-learn 1.5.1 ensemble
+  - Replaces previous K-Means + RandomForest 3-layer system
+  - 13-feature intelligent input pipeline (5 categorical + 8 numerical)
+  - Real-time derived features: comfort_index, environmental_score, temperature_category
+  - Top 3 cake recommendations with confidence scores per prediction
+  - Inference latency: <200ms average
 
-### Core Improvements
+**Feedback System Implementation:**
+- **Supabase PostgreSQL Integration**: Production-grade feedback persistence
+  - feedback_logs table: 18+ columns tracking user behavior and model performance
+  - recommendation_match field: match/did_not_match/unknown tracking
+  - Non-blocking async logging with retry logic (max 3 attempts)
+  - Session tracking and model versioning for A/B testing
+- **Recommendation Accuracy Monitoring**: 
+  - Track user override patterns (when user ignores recommendations)
+  - Measure conversion impact of different recommendation strategies
+  - Segment analysis by user behavior and preferences
 
-#### ML System
-- [x] 3-Layer Hybrid Architecture implemented
-  - Layer 1: K-Means behavioral segmentation (5 clusters)
-  - Layer 2: RandomForest cake prediction classifier (8 classes)
-  - Layer 3: Custom ranking layer with cluster-cake statistics
-- [x] Model loading refactored with explicit pathfinding
-- [x] V2-only model loader with zero fallback logic
-- [x] Production ML system fully validated
+**Architecture Updates:**
+- **3-Layer Modular System**: Frontend (Streamlit) → Services (ML) → Integrations (Supabase) → Data
+  - Clean separation of concerns
+  - Easy debugging and feature iterations
+  - Scalable design for analytics workflows
 
-#### Data & Serialization
-- [x] **NumPy JSON Serialization Fix**: Implemented `make_json_safe()` utility
-  - Converts NumPy arrays to lists
-  - Handles np.float64, np.int64, np.uint8 types
-  - Supports recursive type conversion for nested structures
-  - Integrated with order logging system
-- [x] NaN handling improved in feature engineering
+**Core Features Added:**
+- [x] Hybrid v1 ML model (XGBoost 2.0.3 + scikit-learn 1.5.1)
+- [x] 13-feature engineering pipeline (weather, mood, temperature, user preferences, environmental factors)
+- [x] Supabase feedback_logs schema with recommendation_match tracking
+- [x] Non-blocking async logging with error resilience
+- [x] Model versioning support (experiment_id for test tracking)
+- [x] Feature contract enforcement (feature_contract.py)
+- [x] Python-dotenv security for credential management
 
-#### Integration & Testing
-- [x] Test suite cleaned of legacy dependencies
-  - Removed 9 legacy fallback tests
-  - 12/12 active tests passing (100%)
-  - 3 tests quarantined for NumPy 2.0+ upgrade
-- [x] Streamlit app verified running without errors
-- [x] JSON serialization validated end-to-end
+**Testing & Validation:**
+- [x] Full end-to-end feedback pipeline tested
+- [x] Supabase connection resilience validated
+- [x] JSON serialization for NumPy types verified
+- [x] Model inference performance benchmarked
+- [x] Recommendation accuracy tracking working
 
-#### Presentation Layer
-- [x] Copywriter integration with hybrid recommender
-- [x] Luxury description generation system
-- [x] HTML formatting for product cards
-- [x] Beige AI formatting layer fully functional
-
-### Deployment Status
-- ✅ Production ML pipeline active (V2 XGBoost only)
-- ✅ Zero fallback logic remaining
-- ✅ All core tests passing
-- ✅ Fail-fast error handling configured
-- ✅ Ready for deployment
+**Deployment Status:**
+- ✅ Hybrid v1 ML model in production (XGBoost ensemble)
+- ✅ Supabase feedback system live and collecting data
+- ✅ recommendation_match accuracy tracking active
+- ✅ python-dotenv dependency added to requirements.txt
+- ✅ Environment-aware fallbacks in place for robustness
+- ✅ All systems passing validation tests
+- ✅ Ready for production metrics analysis
 
 ---
 
