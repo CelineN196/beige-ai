@@ -13,41 +13,44 @@ CRITICAL: Every feedback log MUST include model_version for experimentation.
 # ============================================================================
 
 """
-VERSION FORMAT: {model_type}_{architecture}_v{major}.{minor}_{deployment_date}
+VERSION FORMAT: {model_name}_{version}
 
 Examples:
-  - hybrid_v1_2024-01-15          (Initial hybrid model)
-  - hybrid_v2_2024-02-01          (Improved hybrid with better clustering)
-  - neural_v1_2024-02-20          (New neural architecture)
-  - rule_based_v1_fallback        (Fallback model, no date)
+  - hybrid_v1              (Hybrid v1: XGBoost + scikit-learn ensemble, current production)
+  - hybrid_v2_2026-04-15   (Future version with improved features)
+  - ensemble_v1_2026-05-01 (Alternative ensemble approach)
 
 Semantic Versioning Guidelines:
-  - MAJOR version: Architecture change (K-Means → neural, feature set change)
-  - MINOR version: Hyperparameter tuning, model retraining on new data
-  - PATCH version: (Not used - tracked by deployment date)
+  - MAJOR version: Algorithm change (XGBoost → Neural, feature set change)
+  - MINOR version: Hyperparameter tuning, retraining on new feedback data
+  - PATCH version: (Not used - tracked by deployment date for future)
 
 Model Type Categories:
-  - hybrid:     K-Means + RandomForest + Custom Ranking
-  - neural:     Deep learning models (future)
-  - rule_based: Rule-based fallback (no ML)
+  - hybrid:     XGBoost + scikit-learn preprocessing (current)
   - ensemble:   Multiple model combination
+  - neural:     Deep learning models (future)
 """
 
 # ============================================================================
-# 2. MODEL REGISTRY
+# 2. MODEL REGISTRY - HYBRID V1
 # ============================================================================
 
 """
-Location: models/production/ (6 validated files)
-          models/legacy/ (archived versions)
+CURRENT PRODUCTION MODEL: Hybrid v1
+Location: backend/models/v2_final_model.pkl (3.2 MB)
 
-Files in Production:
-  ✅ best_model.joblib           (Current active model)
-  ✅ preprocessor.joblib         (Feature preprocessing)
-  ✅ feature_info.joblib         (Feature metadata)
-  ✅ v2_metadata.json            (CAKE_HEALTH_PROFILES)
-  ✅ cake_model.joblib           (Alternative model)
-  ✅ association_rules.csv       (Cake association rules)
+Model Specification:
+  ✅ Algorithm: XGBoost 2.0.3 + scikit-learn 1.5.1
+  ✅ Input Features: 13 (5 categorical + 8 numerical)
+  ✅ Output Classes: 8 cake types
+  ✅ Training Source: feedback_logs table from Supabase
+  ✅ Versioning Field: model_version = "hybrid_v1" in feedback logs
+  ✅ A/B Testing: Use experiment_id field for test tracking
+  ✅ Validation: is_held_out field for hold-out test set
+
+Archived Models:
+  📁 backend/models/legacy/    (Previous versions for rollback)
+"""
 
 Version Information Storage:
   Backend: model_versions table in Supabase
